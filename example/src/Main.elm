@@ -29,7 +29,7 @@ update msg _ _ _ =
 
 page : A.Page Model Msg
 page =
-    A.page
+    A.resourcePage
         { path = "/page/:id"
         , title = \_ _ v -> "User: " ++ v
         , resource = \_ model -> model.value
@@ -49,13 +49,12 @@ home : A.Page Model Msg
 home =
     A.page
         { path = "/"
-        , title = \_ _ _ -> "Home"
-        , resource = \_ _ -> ()
-        , init = \_ model _ -> ( model, Cmd.none )
-        , update = \_ _ model _ -> ( model, Cmd.none )
-        , subscriptions = \_ _ _ -> Sub.none
+        , title = \_ _ -> "Home"
+        , init = \_ model -> ( model, Cmd.none )
+        , update = \_ _ model -> ( model, Cmd.none )
+        , subscriptions = \_ _ -> Sub.none
         , view =
-            \_ _ _ ->
+            \_ _ ->
                 div [] [ text "Home" ]
         }
 
