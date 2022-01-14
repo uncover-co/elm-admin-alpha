@@ -13,7 +13,7 @@ import Browser exposing (UrlRequest(..))
 import Browser.Navigation
 import Dict exposing (Dict)
 import ElmAdmin.RouteParams exposing (RouteParams)
-import ElmAdmin.Router
+import ElmAdmin.Router exposing (pathToString)
 import ElmAdmin.Styles
 import ElmWidgets
 import Html exposing (..)
@@ -31,7 +31,7 @@ type alias ElmAdmin flags model msg =
 type alias Page model msg =
     { path : List String
     , title : RouteParams -> model -> String
-    , disabled : RouteParams -> model -> Bool
+    , disabled : String -> RouteParams -> model -> Bool
     , init : RouteParams -> model -> ( model, Cmd msg )
     , update : msg -> RouteParams -> model -> ( model, Cmd msg )
     , subscriptions : RouteParams -> model -> Sub msg
@@ -48,7 +48,7 @@ type alias Model model =
     { navKey : Browser.Navigation.Key
     , model : model
     , routeParams : RouteParams
-    , activePath : Maybe String
+    , activePath : String
     , darkMode : Bool
     }
 
@@ -69,7 +69,7 @@ oneOfPage pageRouteCache url model =
     ElmAdmin.Router.oneOf .path pageRouteCache url
         |> Maybe.andThen
             (\( p, routeParams_ ) ->
-                if p.disabled routeParams_ model then
+                if p.disabled (pathToString p.path) routeParams_ model then
                     Nothing
 
                 else
@@ -102,8 +102,8 @@ init props flags url navKey =
 
         ( activePath, routeParams ) =
             activePage
-                |> Maybe.map (Tuple.mapFirst (Just << pagePathAsString))
-                |> Maybe.withDefault ( Nothing, ElmAdmin.RouteParams.empty )
+                |> Maybe.map (Tuple.mapFirst pagePathAsString)
+                |> Maybe.withDefault ( "/", ElmAdmin.RouteParams.empty )
 
         adminCmd =
             if activePage == Nothing && url.path /= "/" then
@@ -150,7 +150,7 @@ update pages pageRouteCache msg model =
             case oneOfPage pageRouteCache url model.model of
                 Just ( page, routeParams ) ->
                     ( { model
-                        | activePath = Just (pagePathAsString page)
+                        | activePath = pagePathAsString page
                         , routeParams = routeParams
                       }
                     , Cmd.none
@@ -159,7 +159,7 @@ update pages pageRouteCache msg model =
                 Nothing ->
                     if url.path == "/" then
                         ( { model
-                            | activePath = Nothing
+                            | activePath = "/"
                             , routeParams = ElmAdmin.RouteParams.empty
                           }
                         , Cmd.none
@@ -174,19 +174,15 @@ update pages pageRouteCache msg model =
             ( { model | darkMode = not model.darkMode }, Cmd.none )
 
         Msg msg_ ->
-            model.activePath
-                |> Maybe.andThen
-                    (\path ->
-                        Dict.get path pages
-                            |> Maybe.map
-                                (\page ->
-                                    page.update msg_ model.routeParams model.model
-                                        |> (\( model_, cmd ) ->
-                                                ( { model | model = model_ }
-                                                , Cmd.map Msg cmd
-                                                )
-                                           )
-                                )
+            Dict.get model.activePath pages
+                |> Maybe.map
+                    (\page ->
+                        page.update msg_ model.routeParams model.model
+                            |> (\( model_, cmd ) ->
+                                    ( { model | model = model_ }
+                                    , Cmd.map Msg cmd
+                                    )
+                               )
                     )
                 |> Maybe.withDefault ( model, Cmd.none )
 
@@ -201,6 +197,7 @@ view :
     , lightTheme : ThemeSpec.Theme
     , darkTheme : ThemeSpec.Theme
     , darkModeClass : String
+    , preventDarkMode : Bool
     }
     -> Dict String (Page model msg)
     -> List (UINavItem model)
@@ -209,11 +206,10 @@ view :
 view props pages navItems model =
     let
         activePage =
-            model.activePath
-                |> Maybe.andThen (\path -> Dict.get path pages)
+            Dict.get model.activePath pages
                 |> Maybe.andThen
                     (\p ->
-                        if p.disabled model.routeParams model.model then
+                        if p.disabled (pathToString p.path) model.routeParams model.model then
                             Nothing
 
                         else
@@ -242,11 +238,15 @@ view props pages navItems model =
     in
     { title = props.title
     , body =
-        [ ThemeSpec.globalProviderWithDarkMode
-            { light = props.lightTheme
-            , dark = props.darkTheme
-            , strategy = ThemeSpec.ClassStrategy props.darkModeClass
-            }
+        [ if props.preventDarkMode then
+            ThemeSpec.globalProvider props.lightTheme
+
+          else
+            ThemeSpec.globalProviderWithDarkMode
+                { light = props.lightTheme
+                , dark = props.darkTheme
+                , strategy = ThemeSpec.ClassStrategy props.darkModeClass
+                }
         , ElmWidgets.globalStyles
         , ElmAdmin.Styles.globalStyles
         , div [ classList [ ( props.darkModeClass, model.darkMode ) ] ]
@@ -260,11 +260,15 @@ view props pages navItems model =
                                 ]
                                 [ text props.title ]
                             ]
-                        , button
-                            [ class "eadm eadm-sidebar-dark-btn"
-                            , HE.onClick ToggleDarkMode
-                            ]
-                            [ text "D" ]
+                        , if not props.preventDarkMode then
+                            button
+                                [ class "eadm eadm-sidebar-dark-btn"
+                                , HE.onClick ToggleDarkMode
+                                ]
+                                [ text "D" ]
+
+                          else
+                            text ""
                         ]
                     , UI.Nav.view model.activePath model.routeParams model.model navItems
                     ]

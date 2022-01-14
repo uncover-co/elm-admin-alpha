@@ -8,77 +8,67 @@ import Html.Events as HE
 
 
 type Msg
-    = OnInput String
+    = Msg
 
 
 type alias Model =
-    { value : String }
+    ()
 
 
-init : RouteParams -> Model -> String -> ( Model, Cmd Msg )
-init _ _ _ =
-    ( { value = "" }, Cmd.none )
-
-
-update : Msg -> A.RouteParams -> Model -> String -> ( Model, Cmd Msg )
-update msg _ _ _ =
-    case msg of
-        OnInput v ->
-            ( { value = v }, Cmd.none )
-
-
-page : A.Page Model Msg
-page =
-    A.resourcePage
-        { path = "/page/:id"
-        , title = \_ _ v -> "User: " ++ v
-        , resource = \_ model -> model.value
-        , init = init
-        , update = update
-        , subscriptions = \_ _ _ -> Sub.none
-        , view =
-            \_ _ value_ ->
-                div []
-                    [ input [ HE.onInput OnInput, value value_ ] []
-                    , p [] [ text value_ ]
-                    ]
-        }
-
-
-home : A.Page Model Msg
-home =
+page : String -> String -> A.Page Model Msg
+page title path =
     A.page
-        { path = "/"
-        , title = \_ _ -> "Home"
+        { path = path
+        , title = \_ _ -> title
         , init = \_ model -> ( model, Cmd.none )
         , update = \_ _ model -> ( model, Cmd.none )
         , subscriptions = \_ _ -> Sub.none
         , view =
-            \_ _ ->
-                div [] [ text "Home" ]
+            \{ pathParams } _ ->
+                div []
+                    [ h1 [] [ text title ]
+                    , div []
+                        (pathParams
+                            |> Dict.keys
+                            |> List.map (\k -> p [] [ text k ])
+                        )
+                    ]
         }
 
 
 main : ElmAdmin () Model Msg
 main =
     admin
-        [ A.external "Docs" "packages"
-        , A.url home
-        , A.single "Users" page
-            |> A.dynamic (\p _ -> Dict.get ":id" p.pathParams |> Maybe.withDefault "…")
-        , A.url page
+        [ A.external "Docs" "https://uncover.co"
+        , A.url (page "Home" "/")
+        , A.single "Users" (page "Users" "/users")
+            |> A.dynamic (\_ p _ -> Dict.get ":id" p.pathParams |> Maybe.withDefault "…")
+        , A.url (page "User" "/users/joaao")
+        , A.single "Grgs" (page "User" "/users/:userId")
+            |> A.params [ ( ":userId", "grgs" ) ]
         , A.group "Workspaces"
-            { main = page
-            , items = [ A.single "Other" page ]
+            { main = page "Workspaces" "/workspaces"
+            , items =
+                [ A.single "Create" (page "New Workspace" "/workspaces/new")
+                , A.group "Group"
+                    { main = page "Group" "/group"
+                    , items =
+                        [ A.single "Group Item" (page "Group Item" "/group/item")
+                        , A.visualGroup "Visual Group"
+                            [ A.single "Visual Group Item" (page "Visual Group Item" "/visual/group/item")
+                            ]
+                        ]
+                    }
+                ]
             }
-        , A.resources "Workspaces"
-            { index = page
-            , show = page
-            , create = page
-            , update = page
+        , A.resources "Workspace Users"
+            { index = page "Index" "/workspace-users"
+            , create = page "Create" "/workspace-users/new"
+            , update = page "Update" "/workspace-users/:workspaceId/update"
+            , show = page "Show" "/workspace-users/:workspaceId"
             }
         ]
-        []
+        [ A.preventDarkMode ]
         { title = "Admin"
-        , init = \_ _ -> ( { value = "Hello" }, Cmd.none )
+        , init = \_ _ -> ( (), Cmd.none )
         }

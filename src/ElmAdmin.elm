@@ -1,9 +1,9 @@
 module ElmAdmin exposing
     ( admin, ElmAdmin
     , single, url, external, group, visualGroup, resources
-    , dynamic, hidden, disabled, Options
+    , dynamic, params, hidden, disabled, Options
     , page, resourcePage, Page, RouteParams
-    , preferDarkMode, darkTheme, lightTheme, darkModeClass
+    , preferDarkMode, preventDarkMode, darkTheme, lightTheme, darkModeClass
     )
 
 {-|
@@ -21,7 +21,7 @@ module ElmAdmin exposing
 
 # Navigation Options
 
-@docs dynamic, hidden, disabled, Options
+@docs dynamic, params, hidden, disabled, Options
 
 
 # Pages
@@ -31,7 +31,7 @@ module ElmAdmin exposing
 
 # Themes
 
-@docs preferDarkMode, darkTheme, lightTheme, darkModeClass
+@docs preferDarkMode, preventDarkMode, darkTheme, lightTheme, darkModeClass
 
 -}
 
@@ -88,16 +88,17 @@ type NavigationItem model msg
 type alias NavItemData model msg =
     { page : ElmAdmin.Model.Page model msg
     , pathParams : List String
-    , title : RouteParams -> model -> String
-    , hidden : RouteParams -> model -> Bool
-    , disabled : RouteParams -> model -> Bool
+    , hardParams : Dict String String
+    , title : String -> RouteParams -> model -> String
+    , hidden : String -> RouteParams -> model -> Bool
+    , disabled : String -> RouteParams -> model -> Bool
     }
 
 
 type alias NavItemDataVisual model =
-    { title : RouteParams -> model -> String
-    , hidden : RouteParams -> model -> Bool
-    , disabled : RouteParams -> model -> Bool
+    { title : String -> RouteParams -> model -> String
+    , hidden : String -> RouteParams -> model -> Bool
+    , disabled : String -> RouteParams -> model -> Bool
     }
 
 
@@ -140,9 +141,10 @@ single title (Page p) =
     Single
         { page = p
         , pathParams = ElmAdmin.Router.parsePathParams p.path
-        , hidden = \_ _ -> False
-        , title = \_ _ -> title
-        , disabled = \_ _ -> False
+        , hardParams = Dict.empty
+        , hidden = \_ _ _ -> False
+        , title = \_ _ _ -> title
+        , disabled = \_ _ _ -> False
         }
 
 
@@ -170,10 +172,11 @@ group title { main, items } =
             Group
                 { main =
                     { page = p
+                    , hardParams = Dict.empty
                     , pathParams = ElmAdmin.Router.parsePathParams p.path
-                    , hidden = \_ _ -> False
-                    , title = \_ _ -> title
-                    , disabled = \_ _ -> False
+                    , hidden = \_ _ _ -> False
+                    , title = \_ _ _ -> title
+                    , disabled = \_ _ _ -> False
                     }
                 , items = items
                 }
@@ -199,12 +202,22 @@ resources :
         }
     -> NavigationItem model msg
 resources title props =
+    let
+        basePath =
+            case props.index of
+                Page page_ ->
+                    pathToString page_.path
+    in
     group title
         { main = props.index
         , items =
-            [ url props.show
-            , url props.update
-            , single "Create" props.create
+            [ visualGroup ""
+                [ single "Create" props.create
+                , url props.update
+                , url props.show
+                ]
+                |> hidden
+                    (\p _ _ -> not (String.startsWith p basePath))
             ]
         }
 
@@ -223,9 +236,9 @@ visualGroup : String -> List (NavigationItem model msg) -> NavigationItem model 
 visualGroup title items =
     VisualGroup
         { main =
-            { hidden = \_ _ -> False
-            , title = \_ _ -> title
-            , disabled = \_ _ -> False
+            { hidden = \_ _ _ -> False
+            , title = \_ _ _ -> title
+            , disabled = \_ _ _ -> False
             }
         , items = items
         }
@@ -237,7 +250,7 @@ visualGroup title items =
         |> hidden (\_ model -> not (userIsAdmin model))
 
 -}
-hidden : (RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
+hidden : (String -> RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
 hidden fn a =
     case a of
         External _ _ ->
@@ -262,7 +275,7 @@ hidden fn a =
         |> disable (\_ model -> not (userIsAdmin model))
 
 -}
-disabled : (RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
+disabled : (String -> RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
 disabled fn a =
     case a of
         External _ _ ->
@@ -308,7 +321,7 @@ disabled fn a =
             )
 
 -}
-dynamic : (RouteParams -> model -> String) -> NavigationItem model msg -> NavigationItem model msg
+dynamic : (String -> RouteParams -> model -> String) -> NavigationItem model msg -> NavigationItem model msg
 dynamic fn a =
     case a of
         External _ _ ->
@@ -330,6 +343,34 @@ dynamic fn a =
             VisualGroup { main = { main | title = fn }, items = items }
 
 
+{-| Manually pass in url params to generate fixed nav links for pages that take in pathParams.
+
+    single "User" User.show
+        |> params [ ( ":userId", "123" ) ]
+
+-}
+params : List ( String, String ) -> NavigationItem model msg -> NavigationItem model msg
+params xs a =
+    case a of
+        External _ _ ->
+            a
+
+        Url _ ->
+            a
+
+        Single i ->
+            Single { i | hardParams = Dict.fromList xs }
+
+        Group { main, items } ->
+            Group
+                { main = { main | hardParams = Dict.fromList xs }
+                , items = items
+                }
+
+        VisualGroup _ ->
+            a
+
+
 
 -- Pages
 
@@ -348,7 +389,7 @@ page :
 page props =
     Page
         { path = pathFromString props.path
-        , disabled = \_ _ -> False
+        , disabled = \_ _ _ -> False
         , title = props.title
         , init = props.init
         , update = props.update
@@ -374,22 +415,22 @@ resourcePage props =
         { path =
             pathFromString props.path
         , disabled =
-            \_ _ -> False
+            \_ _ _ -> False
         , title =
-            \params model ->
-                props.title params model (props.resource params model)
+            \params_ model ->
+                props.title params_ model (props.resource params_ model)
         , init =
-            \params model ->
-                props.init params model (props.resource params model)
+            \params_ model ->
+                props.init params_ model (props.resource params_ model)
         , update =
-            \msg params model ->
-                props.update msg params model (props.resource params model)
+            \msg params_ model ->
+                props.update msg params_ model (props.resource params_ model)
         , subscriptions =
-            \params model ->
-                props.subscriptions params model (props.resource params model)
+            \params_ model ->
+                props.subscriptions params_ model (props.resource params_ model)
         , view =
-            \params model ->
-                props.view params model (props.resource params model)
+            \params_ model ->
+                props.view params_ model (props.resource params_ model)
         }
 
 
@@ -403,9 +444,10 @@ type Options
 
 
 type alias OptionsData =
-    { preferDarkMode : Bool
-    , lightTheme : ThemeSpec.Theme
+    { lightTheme : ThemeSpec.Theme
     , darkTheme : ThemeSpec.Theme
+    , preferDarkMode : Bool
+    , preventDarkMode : Bool
     , darkModeClass : String
     }
 
@@ -414,6 +456,7 @@ defaultOptions : Options
 defaultOptions =
     Options
         { preferDarkMode = True
+        , preventDarkMode = False
         , lightTheme = ThemeSpec.lightTheme
         , darkTheme = ThemeSpec.darkTheme
         , darkModeClass = "eadm-dark"
@@ -425,6 +468,13 @@ defaultOptions =
 preferDarkMode : Options -> Options
 preferDarkMode (Options options) =
     Options { options | preferDarkMode = True }
+
+
+{-| Removes the dark/light mode functionality.
+-}
+preventDarkMode : Options -> Options
+preventDarkMode (Options options) =
+    Options { options | preventDarkMode = True }
 
 
 {-| Sets the class added to the DOM when dark mode is on.
@@ -552,21 +602,29 @@ admin navItems options_ props =
                                         acc
 
                                     Single navItem_ ->
+                                        let
+                                            path =
+                                                applyHardParams navItem_.page.path navItem_.hardParams
+                                        in
                                         UI.Nav.Single
                                             { title = navItem_.title
-                                            , path = pathToString navItem_.page.path
-                                            , pathParams = parsePathParams navItem_.page.path
+                                            , path = pathToString path
+                                            , pathParams = parsePathParams path
                                             , hidden = navItem_.hidden
                                             , disabled = navItem_.disabled
                                             }
                                             :: acc
 
                                     Group { main, items } ->
+                                        let
+                                            path =
+                                                applyHardParams main.page.path main.hardParams
+                                        in
                                         UI.Nav.Group
                                             { main =
                                                 { title = main.title
-                                                , path = pathToString main.page.path
-                                                , pathParams = parsePathParams main.page.path
+                                                , path = pathToString path
+                                                , pathParams = parsePathParams path
                                                 , hidden = main.hidden
                                                 , disabled = main.disabled
                                                 }
@@ -604,6 +662,7 @@ admin navItems options_ props =
         , view =
             view
                 { title = props.title
+                , preventDarkMode = options.preventDarkMode
                 , darkModeClass = options.darkModeClass
                 , lightTheme = options.lightTheme
                 , darkTheme = options.darkTheme
@@ -611,3 +670,17 @@ admin navItems options_ props =
                 pages
                 viewNavItems
         }
+
+
+applyHardParams : List String -> Dict String String -> List String
+applyHardParams path hardParams =
+    path
+        |> List.map
+            (\p ->
+                if String.startsWith ":" p then
+                    Dict.get p hardParams
+                        |> Maybe.withDefault p
+
+                else
+                    p
+            )
