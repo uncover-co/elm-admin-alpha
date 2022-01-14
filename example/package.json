@@ -1,0 +1,16 @@
+{
+  "name": "example",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "postinstall": "elm-tooling install",
+    "start": "elm-live ./src/Main.elm -p 3000 -u -- --debug"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "elm-live": "^4.0.2",
+    "elm-tooling": "^1.7.0"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/elm-stuff": true,
+    "index.html": true,
+    "example/**/elm-stuff": true,
+    "example/**/node_modules": true,
+    "example/**/index.html": true,
+    "**/index.html": true
+  }
+}
