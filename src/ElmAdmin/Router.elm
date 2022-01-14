@@ -1,7 +1,5 @@
 module ElmAdmin.Router exposing
-    ( RouteParams
-    , applyParams
-    , emptyRouteParams
+    ( applyParams
     , oneOf
     , parsePathParams
     , pathFromString
@@ -10,20 +8,8 @@ module ElmAdmin.Router exposing
     )
 
 import Dict exposing (Dict)
+import ElmAdmin.RouteParams exposing (RouteParams)
 import Url exposing (Url)
-
-
-type alias RouteParams =
-    { pathParams : Dict String String
-    , queryParams : Dict String (List String)
-    }
-
-
-emptyRouteParams : RouteParams
-emptyRouteParams =
-    { pathParams = Dict.empty
-    , queryParams = Dict.empty
-    }
 
 
 pathFromString : String -> List String
@@ -66,7 +52,7 @@ toCache toPath xs =
         (\a acc ->
             case toPath a of
                 [] ->
-                    Dict.insert "/" [ a ] acc
+                    Dict.insert "" [ a ] acc
 
                 head :: _ ->
                     Dict.update head

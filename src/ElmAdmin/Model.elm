@@ -1,5 +1,6 @@
 module ElmAdmin.Model exposing
-    ( Model
+    ( ElmAdmin
+    , Model
     , Msg(..)
     , Page
     , init
@@ -11,24 +12,26 @@ module ElmAdmin.Model exposing
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation
 import Dict exposing (Dict)
-import ElmAdmin.Router exposing (RouteParams, emptyRouteParams)
+import ElmAdmin.RouteParams exposing (RouteParams)
+import ElmAdmin.Router
 import ElmAdmin.Styles
 import ElmWidgets
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Html.Events as HE
 import ThemeSpec
 import UI.Nav exposing (UINavItem)
 import Url exposing (Url)
 
 
-type alias RouteParams =
-    { pathParams : Dict String String
-    , queryParams : Dict String (List String)
-    }
+type alias ElmAdmin flags model msg =
+    Program flags (Model model) (Msg msg)
 
 
 type alias Page model msg =
     { path : List String
+    , title : RouteParams -> model -> String
+    , disabled : RouteParams -> model -> Bool
     , init : RouteParams -> model -> ( model, Cmd msg )
     , update : msg -> RouteParams -> model -> ( model, Cmd msg )
     , subscriptions : RouteParams -> model -> Sub msg
@@ -46,39 +49,51 @@ type alias Model model =
     , model : model
     , routeParams : RouteParams
     , activePath : Maybe String
+    , darkMode : Bool
     }
 
 
 type Msg msg
-    = DoNothing
-    | OnUrlRequest UrlRequest
+    = OnUrlRequest UrlRequest
     | OnUrlChange Url
+    | ToggleDarkMode
     | Msg msg
 
 
 oneOfPage :
     Dict String (List (Page model msg))
     -> Url
+    -> model
     -> Maybe ( Page model msg, RouteParams )
-oneOfPage pageRouteCache url =
+oneOfPage pageRouteCache url model =
     ElmAdmin.Router.oneOf .path pageRouteCache url
+        |> Maybe.andThen
+            (\( p, routeParams_ ) ->
+                if p.disabled routeParams_ model then
+                    Nothing
+
+                else
+                    Just ( p, routeParams_ )
+            )
 
 
 init :
-    Dict String (List (Page model msg))
-    -> (flags -> Browser.Navigation.Key -> ( model, Cmd msg ))
+    { pageRoutes : Dict String (List (Page model msg))
+    , initModel : flags -> Browser.Navigation.Key -> ( model, Cmd msg )
+    , preferDarkMode : Bool
+    }
     -> flags
     -> Url
     -> Browser.Navigation.Key
     -> ( Model model, Cmd (Msg msg) )
-init pageRouteCache initModel flags url navKey =
+init props flags url navKey =
     let
+        ( initialModel, initialCmd ) =
+            props.initModel flags navKey
+
         activePage : Maybe ( Page model msg, RouteParams )
         activePage =
-            oneOfPage pageRouteCache url
-
-        ( initialModel, initialCmd ) =
-            initModel flags navKey
+            oneOfPage props.pageRoutes url initialModel
 
         ( initialPageModel, initialPageCmd ) =
             activePage
@@ -88,7 +103,7 @@ init pageRouteCache initModel flags url navKey =
         ( activePath, routeParams ) =
             activePage
                 |> Maybe.map (Tuple.mapFirst (Just << pagePathAsString))
-                |> Maybe.withDefault ( Nothing, emptyRouteParams )
+                |> Maybe.withDefault ( Nothing, ElmAdmin.RouteParams.empty )
 
         adminCmd =
             if activePage == Nothing && url.path /= "/" then
@@ -101,6 +116,7 @@ init pageRouteCache initModel flags url navKey =
       , model = initialPageModel
       , routeParams = routeParams
       , activePath = activePath
+      , darkMode = props.preferDarkMode
       }
     , Cmd.batch
         [ Cmd.map Msg initialCmd
@@ -118,9 +134,6 @@ update :
     -> ( Model model, Cmd (Msg msg) )
 update pages pageRouteCache msg model =
     case msg of
-        DoNothing ->
-            ( model, Cmd.none )
-
         OnUrlRequest request ->
             case request of
                 External url ->
@@ -134,28 +147,31 @@ update pages pageRouteCache msg model =
                     )
 
         OnUrlChange url ->
-            if url.path == "/" then
-                ( { model
-                    | activePath = Nothing
-                    , routeParams = emptyRouteParams
-                  }
-                , Cmd.none
-                )
+            case oneOfPage pageRouteCache url model.model of
+                Just ( page, routeParams ) ->
+                    ( { model
+                        | activePath = Just (pagePathAsString page)
+                        , routeParams = routeParams
+                      }
+                    , Cmd.none
+                    )
 
-            else
-                case oneOfPage pageRouteCache url of
-                    Just ( page, routeParams ) ->
+                Nothing ->
+                    if url.path == "/" then
                         ( { model
-                            | activePath = Just (pagePathAsString page)
-                            , routeParams = routeParams
+                            | activePath = Nothing
+                            , routeParams = ElmAdmin.RouteParams.empty
                           }
                         , Cmd.none
                         )
 
-                    Nothing ->
+                    else
                         ( model
                         , Browser.Navigation.pushUrl model.navKey "/"
                         )
+
+        ToggleDarkMode ->
+            ( { model | darkMode = not model.darkMode }, Cmd.none )
 
         Msg msg_ ->
             model.activePath
@@ -181,43 +197,82 @@ subscriptions _ =
 
 
 view :
-    String
+    { title : String
+    , lightTheme : ThemeSpec.Theme
+    , darkTheme : ThemeSpec.Theme
+    , darkModeClass : String
+    }
     -> Dict String (Page model msg)
     -> List (UINavItem model)
     -> Model model
     -> Browser.Document (Msg msg)
-view title pages navItems model =
+view props pages navItems model =
     let
         activePage =
-            case model.activePath of
-                Just path ->
-                    Dict.get path pages
-                        |> Maybe.map
-                            (\page ->
-                                page.view model.routeParams model.model
-                                    |> Html.map Msg
-                            )
-                        |> Maybe.withDefault (text "")
+            model.activePath
+                |> Maybe.andThen (\path -> Dict.get path pages)
+                |> Maybe.andThen
+                    (\p ->
+                        if p.disabled model.routeParams model.model then
+                            Nothing
 
-                Nothing ->
-                    text ""
+                        else
+                            Just p
+                    )
+
+        activePageTitle =
+            activePage
+                |> Maybe.map
+                    (\page ->
+                        h2
+                            [ class "eadm eadm-page-title" ]
+                            [ text (page.title model.routeParams model.model)
+                            ]
+                    )
+                |> Maybe.withDefault (text "")
+
+        activePageView =
+            activePage
+                |> Maybe.map
+                    (\page ->
+                        page.view model.routeParams model.model
+                            |> Html.map Msg
+                    )
+                |> Maybe.withDefault (text "")
     in
-    { title = title
+    { title = props.title
     , body =
         [ ThemeSpec.globalProviderWithDarkMode
-            { light = ThemeSpec.lightTheme
-            , dark = ThemeSpec.darkTheme
-            , strategy = ThemeSpec.SystemStrategy
+            { light = props.lightTheme
+            , dark = props.darkTheme
+            , strategy = ThemeSpec.ClassStrategy props.darkModeClass
             }
         , ElmWidgets.globalStyles
         , ElmAdmin.Styles.globalStyles
-        , div [ class "eadm eadm-wrapper" ]
-            [ aside [ class "eadm eadm-sidebar" ]
-                [ h1 [ class "eadm eadm-title" ] [ text title ]
-                , UI.Nav.view model.activePath model.routeParams model.model navItems
+        , div [ classList [ ( props.darkModeClass, model.darkMode ) ] ]
+            [ div [ class "eadm eadm-wrapper" ]
+                [ aside [ class "eadm eadm-sidebar" ]
+                    [ header [ class "eadm eadm-sidebar-header" ]
+                        [ h1 [ class "eadm eadm-title" ]
+                            [ a
+                                [ class "eadm eadm-link"
+                                , href "/"
+                                ]
+                                [ text props.title ]
+                            ]
+                        , button
+                            [ class "eadm eadm-sidebar-dark-btn"
+                            , HE.onClick ToggleDarkMode
+                            ]
+                            [ text "D" ]
+                        ]
+                    , UI.Nav.view model.activePath model.routeParams model.model navItems
+                    ]
+                , main_ [ class "eadm eadm-main" ]
+                    [ activePageTitle
+                    , activePageView
+                    ]
                 ]
-            , main_ [ class "eadm eadm-main" ]
-                [ activePage ]
             ]
         ]
     }

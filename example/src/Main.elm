@@ -5,7 +5,6 @@ import ElmAdmin as A exposing (ElmAdmin, RouteParams, admin)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events as HE
-import Url exposing (Url)
 
 
 type Msg
@@ -32,7 +31,8 @@ page : A.Page Model Msg
 page =
     A.page
         { path = "/page/:id"
-        , toResource = \_ model -> model.value
+        , title = \_ _ v -> "User: " ++ v
+        , resource = \_ model -> model.value
         , init = init
         , update = update
         , subscriptions = \_ _ _ -> Sub.none
@@ -45,16 +45,29 @@ page =
         }
 
 
+home : A.Page Model Msg
+home =
+    A.page
+        { path = "/"
+        , title = \_ _ _ -> "Home"
+        , resource = \_ _ -> ()
+        , init = \_ model _ -> ( model, Cmd.none )
+        , update = \_ _ model _ -> ( model, Cmd.none )
+        , subscriptions = \_ _ _ -> Sub.none
+        , view =
+            \_ _ _ ->
+                div [] [ text "Home" ]
+        }
+
+
 main : ElmAdmin () Model Msg
 main =
     admin
-        { title = "Admin"
-        , initModel = \_ _ -> ( { value = "Hello" }, Cmd.none )
-        }
         [ A.external "Docs" "packages"
+        , A.url home
         , A.single "Users" page
-            |> A.format (\p _ -> Dict.get ":id" p.pathParams |> Maybe.withDefault "…")
-        , A.hidden page
+            |> A.dynamic (\p _ -> Dict.get ":id" p.pathParams |> Maybe.withDefault "…")
+        , A.url page
         , A.group "Workspaces"
             { main = page
             , items = [ A.single "Other" page ]
@@ -66,3 +79,7 @@ main =
             , update = page
             }
         ]
+        []
+        { title = "Admin"
+        , init = \_ _ -> ( { value = "Hello" }, Cmd.none )
+        }
