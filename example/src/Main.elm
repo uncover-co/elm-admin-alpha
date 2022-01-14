@@ -68,7 +68,7 @@ main =
             , show = page "Show" "/workspace-users/:workspaceId"
             }
         ]
-        [ A.preventDarkMode ]
+        [ A.preferDarkMode ]
         { title = "Admin"
         , init = \_ _ -> ( (), Cmd.none )
         }

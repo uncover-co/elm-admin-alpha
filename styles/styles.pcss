@@ -19,14 +19,14 @@
   display: flex;
   height: 100vh;
   overflow: auto;
-  background: var(--tmspc-background-base);
+  background: var(--tmspc-background-contrast);
 }
 
 /* Sidebar */
 
 .eadm.eadm-sidebar {
   width: 340px;
-  background: var(--tmspc-background-tint);
+  background: var(--tmspc-background-base);
 
   position: relative;
   z-index: 1;
@@ -40,7 +40,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 20px;
-  border-bottom: 1px solid var(--tmspc-background-light);
+  border-bottom: 1px solid var(--tmspc-background-tint);
   color: var(--tmspc-color-dark);
 }
 
@@ -58,7 +58,7 @@
   width: 24px;
   height: 24px;
   background: transparent;
-  border: 2px solid var(--tmspc-background-dark);
+  border: 2px solid var(--tmspc-background-light);
   border-radius: 50%;
   color: var(--tmspc-color-light);
   opacity: 0.75;
@@ -115,7 +115,7 @@
   text-decoration: none;
 
   &:hover {
-    background: var(--tmspc-background-light);
+    background: var(--tmspc-background-tint);
   }
   &.eadm-m-group {
     color: var(--tmspc-color-base);
@@ -126,7 +126,7 @@
     cursor: default;
   }
   &.eadm-m-active {
-    background: var(--tmspc-background-light);
+    background: var(--tmspc-background-tint);
     color: var(--tmspc-color-base);
   }
 }
