@@ -73,6 +73,15 @@ oneOfPage pageRoutes url model =
             )
 
 
+enabledPage : RouteParams -> model -> Page model msg -> Maybe (Page model msg)
+enabledPage routeParams model page =
+    if page.disabled routeParams model then
+        Nothing
+
+    else
+        Just page
+
+
 init :
     { init : flags -> Browser.Navigation.Key -> ( model, Cmd msg )
     , pageRoutes : Dict String (List (Page model msg))
@@ -222,27 +231,85 @@ update props msg model =
 
         Msg msg_ ->
             let
+                -- First we update the user model using the global update
                 ( model_, cmd ) =
                     props.update model.routeParams msg_ model.model
 
-                ( model__, cmd_ ) =
-                    case protectedModel of
-                        Just protectedModel_ ->
+                -- Then we check if we should initialize the current active page
+                -- There are a few different reasons this should be triggered:
+                ( model__, pageInitCmd ) =
+                    case ( protectedModel, props.protectedModel model_ ) of
+                        -- if the app changes from unprotected to protected
+                        -- and the user already was in a valid route
+                        ( Nothing, Just protectedModel_ ) ->
                             Dict.get model.routeParams.path props.protectedPages
+                                |> Maybe.andThen (enabledPage model.routeParams protectedModel_)
                                 |> Maybe.map
                                     (\page ->
-                                        page.update model.routeParams msg_ protectedModel_
+                                        page.init model.routeParams protectedModel_
                                             |> Tuple.mapFirst (props.protectedToModel model_)
                                     )
                                 |> Maybe.withDefault ( model_, Cmd.none )
 
+                        -- if the app changes from protected to unprotected
+                        -- and the user already was in a valid route
+                        ( Just _, Nothing ) ->
+                            Dict.get model.routeParams.path props.pages
+                                |> Maybe.andThen (enabledPage model.routeParams model.model)
+                                |> Maybe.map (\page -> page.init model.routeParams model_)
+                                |> Maybe.withDefault ( model_, Cmd.none )
+
+                        -- if the user is in a protected state
+                        -- and two pages with the same route exists (one enabled and one disabled)
+                        -- and the user switches from one to the other
+                        ( Just previousProtectedModel_, Just protectedModel_ ) ->
+                            case Dict.get model.routeParams.path props.protectedPages of
+                                Just page ->
+                                    if page.disabled model.routeParams previousProtectedModel_ && not (page.disabled model.routeParams protectedModel_) then
+                                        page.init model.routeParams protectedModel_
+                                            |> Tuple.mapFirst (props.protectedToModel model_)
+
+                                    else
+                                        ( model_, Cmd.none )
+
+                                Nothing ->
+                                    ( model_, Cmd.none )
+
+                        -- if the user is in an unprotected state
+                        -- and two pages with the same route exists (one enabled and one disabled)
+                        -- and the user switches from one to the other
+                        ( Nothing, Nothing ) ->
+                            case Dict.get model.routeParams.path props.pages of
+                                Just page ->
+                                    if page.disabled model.routeParams model.model && not (page.disabled model.routeParams model_) then
+                                        page.init model.routeParams model_
+
+                                    else
+                                        ( model_, Cmd.none )
+
+                                Nothing ->
+                                    ( model_, Cmd.none )
+
+                ( model___, pageCmd ) =
+                    case protectedModel of
+                        Just protectedModel_ ->
+                            Dict.get model.routeParams.path props.protectedPages
+                                |> Maybe.andThen (enabledPage model.routeParams protectedModel_)
+                                |> Maybe.map
+                                    (\page ->
+                                        page.update model.routeParams msg_ protectedModel_
+                                            |> Tuple.mapFirst (props.protectedToModel model__)
+                                    )
+                                |> Maybe.withDefault ( model__, Cmd.none )
+
                         Nothing ->
                             Dict.get model.routeParams.path props.pages
-                                |> Maybe.map (\page -> page.update model.routeParams msg_ model_)
-                                |> Maybe.withDefault ( model_, Cmd.none )
+                                |> Maybe.andThen (enabledPage model.routeParams model.model)
+                                |> Maybe.map (\page -> page.update model.routeParams msg_ model__)
+                                |> Maybe.withDefault ( model__, Cmd.none )
             in
-            ( { model | model = model__ }
-            , Cmd.batch [ cmd, cmd_ ]
+            ( { model | model = model___ }
+            , Cmd.batch [ cmd, pageInitCmd, pageCmd ]
                 |> Cmd.map Msg
             )
 
@@ -275,27 +342,13 @@ subscriptions props model =
             case props.protectedModel model.model of
                 Just protectedModel_ ->
                     Dict.get model.routeParams.path props.protectedPages
-                        |> Maybe.andThen
-                            (\p ->
-                                if p.disabled model.routeParams protectedModel_ then
-                                    Nothing
-
-                                else
-                                    Just p
-                            )
+                        |> Maybe.andThen (enabledPage model.routeParams protectedModel_)
                         |> Maybe.map (\page -> page.subscriptions model.routeParams protectedModel_)
                         |> Maybe.withDefault Sub.none
 
                 Nothing ->
                     Dict.get model.routeParams.path props.pages
-                        |> Maybe.andThen
-                            (\p ->
-                                if p.disabled model.routeParams model.model then
-                                    Nothing
-
-                                else
-                                    Just p
-                            )
+                        |> Maybe.andThen (enabledPage model.routeParams model.model)
                         |> Maybe.map (\page -> page.subscriptions model.routeParams model.model)
                         |> Maybe.withDefault Sub.none
     in
@@ -331,14 +384,7 @@ view props model =
             case protectedModel of
                 Just protectedModel_ ->
                     Dict.get model.routeParams.path props.protectedPages
-                        |> Maybe.andThen
-                            (\p ->
-                                if p.disabled model.routeParams protectedModel_ then
-                                    Nothing
-
-                                else
-                                    Just p
-                            )
+                        |> Maybe.andThen (enabledPage model.routeParams protectedModel_)
                         |> Maybe.map
                             (\p ->
                                 ( h2
@@ -353,14 +399,7 @@ view props model =
 
                 Nothing ->
                     Dict.get model.routeParams.path props.pages
-                        |> Maybe.andThen
-                            (\p ->
-                                if p.disabled model.routeParams model.model then
-                                    Nothing
-
-                                else
-                                    Just p
-                            )
+                        |> Maybe.andThen (enabledPage model.routeParams model.model)
                         |> Maybe.map
                             (\p ->
                                 ( h2
