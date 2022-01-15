@@ -1,10 +1,10 @@
 module Main exposing (main)
 
 import Dict
-import ElmAdmin as A exposing (ElmAdmin, RouteParams, admin)
+import ElmAdmin as A exposing (ElmAdmin, admin)
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events as HE
+import ThemeSpec
 
 
 type Msg
@@ -17,15 +17,14 @@ type alias Model =
 
 page : String -> String -> A.Page Model Msg
 page title path =
-    A.page
-        { path = path
-        , title = \_ _ -> title
+    A.fullPage path
+        { title = \_ _ -> title
         , init = \_ model -> ( model, Cmd.none )
         , update = \_ _ model -> ( model, Cmd.none )
         , subscriptions = \_ _ -> Sub.none
         , view =
             \{ pathParams } _ ->
-                div []
+                div [ style "color" ThemeSpec.color ]
                     [ h1 [] [ text title ]
                     , div []
                         (pathParams
@@ -36,39 +35,59 @@ page title path =
         }
 
 
+usersIndex : A.Page Model Msg
+usersIndex =
+    page "Users" "/users"
+
+
+usersShow : A.Page Model Msg
+usersShow =
+    page "Users" "/users/:userId"
+
+
+usersArchive : A.Page Model Msg
+usersArchive =
+    page "Users" "/users/archive"
+
+
+usersCreate : A.Page Model Msg
+usersCreate =
+    page "Users" "/users/new"
+
+
+workspacesIndex : A.Page Model Msg
+workspacesIndex =
+    page "Workspaces" "/workspaces"
+
+
+workspacesCreate : A.Page Model Msg
+workspacesCreate =
+    page "Workspaces" "/workspaces/new"
+
+
 main : ElmAdmin () Model Msg
 main =
     admin
-        [ A.external "Docs" "https://uncover.co"
-        , A.url (page "Home" "/")
-        , A.single "Users" (page "Users" "/users")
-            |> A.dynamic (\_ p _ -> Dict.get ":id" p.pathParams |> Maybe.withDefault "…")
-        , A.url (page "User" "/users/joaao")
-        , A.single "Grgs" (page "User" "/users/:userId")
-            |> A.params [ ( ":userId", "grgs" ) ]
-        , A.group "Workspaces"
-            { main = page "Workspaces" "/workspaces"
-            , items =
-                [ A.single "Create" (page "New Workspace" "/workspaces/new")
-                , A.group "Group"
-                    { main = page "Group" "/group"
-                    , items =
-                        [ A.single "Group Item" (page "Group Item" "/group/item")
-                        , A.visualGroup "Visual Group"
-                            [ A.single "Visual Group Item" (page "Visual Group Item" "/visual/group/item")
-                            ]
-                        ]
-                    }
-                ]
-            }
-        , A.resources "Workspace Users"
-            { index = page "Index" "/workspace-users"
-            , create = page "Create" "/workspace-users/new"
-            , update = page "Update" "/workspace-users/:workspaceId/update"
-            , show = page "Show" "/workspace-users/:workspaceId"
-            }
-        ]
-        [ A.preferDarkMode ]
         { title = "Admin"
         , init = \_ _ -> ( (), Cmd.none )
+        , update = \_ _ model -> ( model, Cmd.none )
+        , subscriptions = \_ _ -> Sub.none
+        , options = []
+        , pages =
+            [ A.external "Docs" "https://package.elm-lang.org/"
+            , A.visualGroup "Intro"
+                [ A.single "First steps" (page "First Steps" "/first-steps")
+                , A.single "Knowing more" (page "Knowing More" "/know-more")
+                ]
+            , A.folderGroup "Users"
+                usersIndex
+                [ A.single "Create" usersCreate
+                , A.single "Archive" usersArchive
+                , A.url usersShow
+                ]
+            , A.group "Workspaces"
+                workspacesIndex
+                [ A.single "Create" workspacesCreate
+                ]
+            ]
         }

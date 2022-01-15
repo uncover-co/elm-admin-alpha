@@ -33,7 +33,7 @@ type alias Page model msg =
     , title : RouteParams -> model -> String
     , disabled : String -> RouteParams -> model -> Bool
     , init : RouteParams -> model -> ( model, Cmd msg )
-    , update : msg -> RouteParams -> model -> ( model, Cmd msg )
+    , update : RouteParams -> msg -> model -> ( model, Cmd msg )
     , subscriptions : RouteParams -> model -> Sub msg
     , view : RouteParams -> model -> Html msg
     }
@@ -127,12 +127,13 @@ init props flags url navKey =
 
 
 update :
-    Dict String (Page model msg)
+    (RouteParams -> msg -> model -> ( model, Cmd msg ))
+    -> Dict String (Page model msg)
     -> Dict String (List (Page model msg))
     -> Msg msg
     -> Model model
     -> ( Model model, Cmd (Msg msg) )
-update pages pageRouteCache msg model =
+update globalUpdate pages pageRouteCache msg model =
     case msg of
         OnUrlRequest request ->
             case request of
@@ -174,22 +175,42 @@ update pages pageRouteCache msg model =
             ( { model | darkMode = not model.darkMode }, Cmd.none )
 
         Msg msg_ ->
+            let
+                ( model_, cmd ) =
+                    globalUpdate model.routeParams msg_ model.model
+
+                ( model__, cmd_ ) =
+                    Dict.get model.activePath pages
+                        |> Maybe.map (\page -> page.update model.routeParams msg_ model.model)
+                        |> Maybe.withDefault ( model_, Cmd.none )
+            in
+            ( { model | model = model__ }
+            , Cmd.batch [ cmd, cmd_ ]
+                |> Cmd.map Msg
+            )
+
+
+subscriptions : (RouteParams -> model -> Sub msg) -> Dict String (Page model msg) -> Model model -> Sub (Msg msg)
+subscriptions globalSubscriptions pages model =
+    let
+        activePage =
             Dict.get model.activePath pages
-                |> Maybe.map
-                    (\page ->
-                        page.update msg_ model.routeParams model.model
-                            |> (\( model_, cmd ) ->
-                                    ( { model | model = model_ }
-                                    , Cmd.map Msg cmd
-                                    )
-                               )
+                |> Maybe.andThen
+                    (\p ->
+                        if p.disabled (pathToString p.path) model.routeParams model.model then
+                            Nothing
+
+                        else
+                            Just p
                     )
-                |> Maybe.withDefault ( model, Cmd.none )
-
-
-subscriptions : Model model -> Sub (Msg msg)
-subscriptions _ =
-    Sub.none
+    in
+    Sub.batch
+        [ globalSubscriptions model.routeParams model.model
+        , activePage
+            |> Maybe.map (\page -> page.subscriptions model.routeParams model.model)
+            |> Maybe.withDefault Sub.none
+        ]
+        |> Sub.map Msg
 
 
 view :

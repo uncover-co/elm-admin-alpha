@@ -50,6 +50,7 @@
   font-family: var(--tmspc-font-title);
   font-weight: 500;
   font-size: 20px;
+  color: var(--tmspc-color-dark);
 }
 
 /* Sidebar - Dark Mode Button */
@@ -113,21 +114,23 @@
   font-size: 16px;
   color: var(--tmspc-color-light);
   text-decoration: none;
+  border: 0 solid var(--tmspc-highlight-base);
+  transition: border 120ms;
 
   &:hover {
     background: var(--tmspc-background-tint);
   }
   &.eadm-m-group {
-    color: var(--tmspc-color-base);
-    font-size: 18px;
+    color: var(--tmspc-color-dark);
   }
   &.eadm-m-visual-group:hover {
     background: transparent;
     cursor: default;
   }
   &.eadm-m-active {
-    background: var(--tmspc-background-tint);
-    color: var(--tmspc-color-base);
+    background: var(--tmspc-highlight-tint);
+    color: var(--tmspc-highlight-dark);
+    border-left-width: 4px;
   }
 }
 

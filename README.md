@@ -15,19 +15,15 @@ module Users exposing (update)
 
 
 import ElmAdmin as A
+import UI exposing (viewUsers)
 
 
-update : A.Page Msg Model
-update =
-    A.page
-        { path = "/users/:userId"
-        , title = \_ _ user -> user.name
-        , resource = userFromParams
-        , init = fetchUser
-        , update = ...
-        , subscriptions = ...
-        , view \_ _ user = viewUserForm user
-        }
+index : A.Page Msg Model
+index =
+    A.page "/users" "Users"
+        (\routeParams model ->
+            viewUsers model
+        )
 ```
 
 Then you put them all together:
@@ -44,26 +40,28 @@ import Users
 main : ElmAdmin () Msg Model
 main =
     admin
-        [ A.page "Home" Home.page
-        , A.external "Docs" "https://package.elm-lang.org/"
-        , A.resources "Users"
-            { index : Users.index
-            , show : Users.show
-            , create : Users.create
-            , update : Users.update
-            }
-        , A.group "Workspaces"
-            { main = Workspaces.index
-            , items =
-                [ A.single "Archive" Workspaces.archive
-                ]
-            }
-        ]
-        [ preferDarkMode
-        , lightTheme ThemeSpec.lightTheme
-        ]
         { title = "My Admin"
         , init = init
+        , update = update
+        , subscriptions = subscriptions
+        , options = [ preferDarkMode ]
+        , pages =
+            [ A.visualGroup "Guides"
+                [ A.external "Documentation" "https://package.elm-lang.org/"
+                , A.external "Design System" "https://elm-book-in-elm-book.netlify.app/"
+                ]
+            , A.folderGroup "Users"
+                Users.index
+                [ A.single "Create" Users.create
+                , A.single "Archive" Users.archive
+                , A.url Users.show
+                ]
+            , A.group "Workspaces"
+                Workspaces.index
+                [ A.single "Create" Workspaces.create
+                , A.single "Create Project" Workspaces.createProject
+                ]
+            ]
         }
 ```
 

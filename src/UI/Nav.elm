@@ -3,7 +3,6 @@ module UI.Nav exposing
     , view
     )
 
-import Dict exposing (Dict)
 import ElmAdmin.RouteParams exposing (RouteParams)
 import ElmAdmin.Router exposing (applyParams)
 import Html exposing (..)

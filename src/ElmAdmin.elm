@@ -1,8 +1,8 @@
 module ElmAdmin exposing
     ( admin, ElmAdmin
-    , single, url, external, group, visualGroup, resources
+    , single, url, external, group, visualGroup, folderGroup, NavigationItem
     , dynamic, params, hidden, disabled, Options
-    , page, resourcePage, Page, RouteParams
+    , page, fullPage, resourcePage, Page, RouteParams
     , preferDarkMode, preventDarkMode, darkTheme, lightTheme, darkModeClass
     )
 
@@ -16,7 +16,7 @@ module ElmAdmin exposing
 
 # Navigation
 
-@docs single, url, external, group, visualGroup, resources
+@docs single, url, external, group, visualGroup, folderGroup, NavigationItem
 
 
 # Navigation Options
@@ -26,7 +26,7 @@ module ElmAdmin exposing
 
 # Pages
 
-@docs page, resourcePage, Page, RouteParams
+@docs page, fullPage, resourcePage, Page, RouteParams
 
 
 # Themes
@@ -42,6 +42,7 @@ import ElmAdmin.Model exposing (Msg(..), subscriptions, update, view)
 import ElmAdmin.Router exposing (parsePathParams, pathFromString, pathToString)
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Set exposing (Set)
 import ThemeSpec
 import UI.Nav
 
@@ -71,6 +72,7 @@ type alias RouteParams =
 -- Navigation
 
 
+{-| -}
 type NavigationItem model msg
     = External String String
     | Url (ElmAdmin.Model.Page model msg)
@@ -161,12 +163,10 @@ single title (Page p) =
 -}
 group :
     String
-    ->
-        { main : Page model msg
-        , items : List (NavigationItem model msg)
-        }
+    -> Page model msg
+    -> List (NavigationItem model msg)
     -> NavigationItem model msg
-group title { main, items } =
+group title main items =
     case main of
         Page p ->
             Group
@@ -182,44 +182,57 @@ group title { main, items } =
                 }
 
 
-{-| A shorthand for creating a group with the pages commonly used for resources.
+{-| A group that shows its items only if one of them is the current active path.
 
-    resources "Workspaces"
-        { index = Workspace.index
-        , show = Workspace.show
-        , create = Workspace.create
-        , update = Workspace.update
-        }
+    folderGroup "Workspaces"
+        Workspace.index
+        [ single "New" Workspaces.new
+        , url "Show" Workspaces.show
+        , url "Update" Workspaces.update
+        ]
 
 -}
-resources :
+folderGroup :
     String
-    ->
-        { index : Page model msg
-        , show : Page model msg
-        , create : Page model msg
-        , update : Page model msg
-        }
+    -> Page model msg
+    -> List (NavigationItem model msg)
     -> NavigationItem model msg
-resources title props =
+folderGroup title ((Page main_) as main__) items_ =
     let
-        basePath =
-            case props.index of
-                Page page_ ->
-                    pathToString page_.path
+        paths_ : List (NavigationItem model msg) -> Set String -> Set String
+        paths_ items__ acc_ =
+            List.foldl
+                (\item acc ->
+                    case item of
+                        External _ _ ->
+                            acc
+
+                        Single p ->
+                            Set.insert (pathToString p.page.path) acc
+
+                        Url p ->
+                            Set.insert (pathToString p.path) acc
+
+                        Group { main, items } ->
+                            Set.insert (pathToString main.page.path) acc
+                                |> paths_ items
+
+                        VisualGroup { items } ->
+                            paths_ items acc
+                )
+                acc_
+                items__
+
+        paths =
+            paths_ items_ (Set.fromList [ pathToString main_.path ])
     in
-    group title
-        { main = props.index
-        , items =
-            [ visualGroup ""
-                [ single "Create" props.create
-                , url props.update
-                , url props.show
-                ]
-                |> hidden
-                    (\p _ _ -> not (String.startsWith p basePath))
-            ]
-        }
+    group
+        title
+        main__
+        [ visualGroup "" items_
+            |> hidden
+                (\p _ _ -> not (Set.member p paths))
+        ]
 
 
 {-| Creates a visual group (The group label itself is not a nav link).
@@ -376,44 +389,110 @@ params xs a =
 
 
 {-| Creates a page.
+
+    usersIndex : Page model msg
+    usersIndex =
+        viewPage "/users" "All users"
+            (\routeParams model ->
+                div [] [ ... ]
+            )
+
 -}
 page :
-    { path : String
-    , title : RouteParams -> model -> String
-    , init : RouteParams -> model -> ( model, Cmd msg )
-    , update : msg -> RouteParams -> model -> ( model, Cmd msg )
-    , subscriptions : RouteParams -> model -> Sub msg
-    , view : RouteParams -> model -> Html msg
-    }
+    String
+    -> String
+    -> (RouteParams -> model -> Html msg)
     -> Page model msg
-page props =
+page title path view =
     Page
-        { path = pathFromString props.path
+        { path = pathFromString path
+        , title = \_ _ -> title
+        , init = \_ model -> ( model, Cmd.none )
+        , update = \_ _ model -> ( model, Cmd.none )
+        , subscriptions = \_ _ -> Sub.none
+        , view = view
         , disabled = \_ _ _ -> False
+        }
+
+
+{-| Creates a page with it's own Elm architecture.
+
+  - Your `init` will run every time the page gets initialized.
+
+  - Your `update` will run _after_ your main update (and any commands will be batched).
+
+  - Your `subscriptions` will be active only while this page is active.
+
+```
+usersIndex : Page model msg
+usersIndex =
+    fullPage "/users"
+        { title = \routeParams model -> ...
+        , init = \routeParams model -> ...
+        , update = \routeParams model -> ...
+        , subscriptions = \routeParams model -> ...
+        , view = \routeParams model -> ...
+        }
+```
+
+-}
+fullPage :
+    String
+    ->
+        { title : RouteParams -> model -> String
+        , init : RouteParams -> model -> ( model, Cmd msg )
+        , update : RouteParams -> msg -> model -> ( model, Cmd msg )
+        , subscriptions : RouteParams -> model -> Sub msg
+        , view : RouteParams -> model -> Html msg
+        }
+    -> Page model msg
+fullPage path props =
+    Page
+        { path = pathFromString path
         , title = props.title
         , init = props.init
         , update = props.update
         , subscriptions = props.subscriptions
         , view = props.view
+        , disabled = \_ _ _ -> False
         }
 
 
-{-| Creates a page with quick access to a "resource".
+{-| Creates a `fullPage` with quick access to a "resource".
+
+    usersShow : Page model msg
+    usersShow =
+        fullPage "/users/:userId"
+            { resource = \{ pathParams } model ->
+                pathParams
+                    |> Dict.get ":userId"
+                    |> Maybe.andThen (getUser model)
+            , title = \routeParams model user ->
+                user
+                    |> Maybe.map .name
+                    |> Maybe.withDefault "…"
+            , init = \routeParams model user -> ...
+            , update = \routeParams model user -> ...
+            , subscriptions = \routeParams model user -> ...
+            , view = \routeParams model user -> ...
+            }
+
 -}
 resourcePage :
-    { path : String
-    , resource : RouteParams -> model -> resource
-    , title : RouteParams -> model -> resource -> String
-    , init : RouteParams -> model -> resource -> ( model, Cmd msg )
-    , update : msg -> RouteParams -> model -> resource -> ( model, Cmd msg )
-    , subscriptions : RouteParams -> model -> resource -> Sub msg
-    , view : RouteParams -> model -> resource -> Html msg
-    }
+    String
+    ->
+        { resource : RouteParams -> model -> resource
+        , title : RouteParams -> model -> resource -> String
+        , init : RouteParams -> model -> resource -> ( model, Cmd msg )
+        , update : RouteParams -> msg -> model -> resource -> ( model, Cmd msg )
+        , subscriptions : RouteParams -> model -> resource -> Sub msg
+        , view : RouteParams -> model -> resource -> Html msg
+        }
     -> Page model msg
-resourcePage props =
+resourcePage path props =
     Page
         { path =
-            pathFromString props.path
+            pathFromString path
         , disabled =
             \_ _ _ -> False
         , title =
@@ -423,8 +502,8 @@ resourcePage props =
             \params_ model ->
                 props.init params_ model (props.resource params_ model)
         , update =
-            \msg params_ model ->
-                props.update msg params_ model (props.resource params_ model)
+            \params_ msg model ->
+                props.update params_ msg model (props.resource params_ model)
         , subscriptions =
             \params_ model ->
                 props.subscriptions params_ model (props.resource params_ model)
@@ -455,7 +534,7 @@ type alias OptionsData =
 defaultOptions : Options
 defaultOptions =
     Options
-        { preferDarkMode = True
+        { preferDarkMode = False
         , preventDarkMode = False
         , lightTheme = ThemeSpec.lightTheme
         , darkTheme = ThemeSpec.darkTheme
@@ -504,42 +583,44 @@ darkTheme theme (Options options) =
 {-| Bootstraps your admin application.
 
     admin
-        [ A.page "Home" Home.page
-        , A.external "Docs" "https://package.elm-lang.org/"
-        , A.resources "Users"
-            { index = Users.index
-            , show = Users.show
-            , create = Users.create
-            , update = Users.update
-            }
-        , A.group "Workspaces"
-            { main = Workspaces.index
-            , items =
-                [ A.single "Archive" Workspaces.archive
-                ]
-            }
-        ]
-        [ preferDarkMode
-        , lightTheme ThemeSpec.lightTheme
-        ]
         { title = "My Admin"
         , init = init
+        , update = update
+        , subscriptions = subscriptions
+        , options = [ preferDarkMode ]
+        , pages =
+            [ A.page "Home" Home.page
+            , A.external "Docs" "https://package.elm-lang.org/"
+            , A.resources "Users"
+                { index = Users.index
+                , show = Users.show
+                , create = Users.create
+                , update = Users.update
+                }
+            , A.group "Workspaces"
+                { main = Workspaces.index
+                , items =
+                    [ A.single "Archive" Workspaces.archive
+                    ]
+                }
+            ]
         }
 
 -}
 admin :
-    List (NavigationItem model msg)
-    -> List (Options -> Options)
-    ->
-        { title : String
-        , init : flags -> Browser.Navigation.Key -> ( model, Cmd msg )
-        }
+    { title : String
+    , init : flags -> Browser.Navigation.Key -> ( model, Cmd msg )
+    , update : RouteParams -> msg -> model -> ( model, Cmd msg )
+    , subscriptions : RouteParams -> model -> Sub msg
+    , options : List (Options -> Options)
+    , pages : List (NavigationItem model msg)
+    }
     -> ElmAdmin flags model msg
-admin navItems options_ props =
+admin props =
     let
         options : OptionsData
         options =
-            List.foldl (\fn a -> fn a) defaultOptions options_
+            List.foldl (\fn a -> fn a) defaultOptions props.options
                 |> (\(Options o) -> o)
 
         pagesDataList_ :
@@ -569,7 +650,7 @@ admin navItems options_ props =
 
         pagesDataList : List (ElmAdmin.Model.Page model msg)
         pagesDataList =
-            pagesDataList_ navItems
+            pagesDataList_ props.pages
 
         pageRoutes : Dict String (List (ElmAdmin.Model.Page model msg))
         pageRoutes =
@@ -589,6 +670,19 @@ admin navItems options_ props =
         viewNavItems : List (UI.Nav.UINavItem model)
         viewNavItems =
             let
+                applyHardParams : List String -> Dict String String -> List String
+                applyHardParams path hardParams =
+                    path
+                        |> List.map
+                            (\p ->
+                                if String.startsWith ":" p then
+                                    Dict.get p hardParams
+                                        |> Maybe.withDefault p
+
+                                else
+                                    p
+                            )
+
                 viewNavItem_ : List (NavigationItem model msg) -> List (UI.Nav.UINavItem model)
                 viewNavItem_ navItems_ =
                     navItems_
@@ -646,19 +740,19 @@ admin navItems options_ props =
                             []
                         |> List.reverse
             in
-            viewNavItem_ navItems
+            viewNavItem_ props.pages
     in
     Browser.application
-        { init =
+        { onUrlChange = OnUrlChange
+        , onUrlRequest = OnUrlRequest
+        , init =
             ElmAdmin.Model.init
                 { pageRoutes = pageRoutes
                 , initModel = props.init
                 , preferDarkMode = options.preferDarkMode
                 }
-        , update = update pages pageRoutes
-        , subscriptions = subscriptions
-        , onUrlChange = OnUrlChange
-        , onUrlRequest = OnUrlRequest
+        , update = update props.update pages pageRoutes
+        , subscriptions = subscriptions props.subscriptions pages
         , view =
             view
                 { title = props.title
@@ -670,17 +764,3 @@ admin navItems options_ props =
                 pages
                 viewNavItems
         }
-
-
-applyHardParams : List String -> Dict String String -> List String
-applyHardParams path hardParams =
-    path
-        |> List.map
-            (\p ->
-                if String.startsWith ":" p then
-                    Dict.get p hardParams
-                        |> Maybe.withDefault p
-
-                else
-                    p
-            )
