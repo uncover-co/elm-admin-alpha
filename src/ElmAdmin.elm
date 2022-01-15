@@ -154,12 +154,10 @@ single title (Page p) =
 {-| Used for creating grouped pages. Note that the "group" is also a page and if it is hidden or disabled by any means, then the whole group will follow.
 
     group "Workspace"
-        { main = Workspace.index
-        , items =
-            [ single "New" Workspace.create
-            , hidden "Update" Workspace.update
-            ]
-        }
+        Workspace.index
+        [ single "New" Workspace.create
+        , hidden "Update" Workspace.update
+        ]
 
 -}
 group :
@@ -463,7 +461,7 @@ params xs a =
 
     usersIndex : Page model msg
     usersIndex =
-        viewPage "/users" "All users"
+        viewPage "/users" "Users"
             (\routeParams model ->
                 div [] [ ... ]
             )
@@ -474,7 +472,7 @@ page :
     -> String
     -> (RouteParams -> model -> Html msg)
     -> Page model msg
-page title path view =
+page path title view =
     Page
         { path = pathFromString path
         , title = \_ _ -> title
@@ -533,7 +531,7 @@ fullPage path props =
 
     usersShow : Page model msg
     usersShow =
-        fullPage "/users/:userId"
+        resourcePage "/users/:userId"
             { resource = \{ pathParams } model ->
                 pathParams
                     |> Dict.get ":userId"

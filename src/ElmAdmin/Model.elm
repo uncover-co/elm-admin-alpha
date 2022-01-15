@@ -39,11 +39,6 @@ type alias Page model msg =
     }
 
 
-pagePathAsString : Page model msg -> String
-pagePathAsString page =
-    "/" ++ (page.path |> String.join "/")
-
-
 type alias Model model =
     { navKey : Browser.Navigation.Key
     , model : model
@@ -99,10 +94,10 @@ init props flags url navKey =
                 |> Maybe.map (\( page, routeParams_ ) -> page.init routeParams_ initialModel)
                 |> Maybe.withDefault ( initialModel, initialCmd )
 
-        ( activePath, routeParams ) =
+        routeParams =
             activePage
-                |> Maybe.map (Tuple.mapFirst pagePathAsString)
-                |> Maybe.withDefault ( "/", ElmAdmin.RouteParams.empty )
+                |> Maybe.map Tuple.second
+                |> Maybe.withDefault ElmAdmin.RouteParams.empty
 
         adminCmd =
             if activePage == Nothing && url.path /= "/" then
