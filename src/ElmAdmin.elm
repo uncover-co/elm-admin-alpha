@@ -63,7 +63,8 @@ type Page model msg
 
 {-| -}
 type alias RouteParams =
-    { pathParams : Dict String String
+    { path : String
+    , pathParams : Dict String String
     , queryParams : Dict String (List String)
     }
 
@@ -91,16 +92,16 @@ type alias NavItemData model msg =
     { page : ElmAdmin.Model.Page model msg
     , pathParams : List String
     , hardParams : Dict String String
-    , title : String -> RouteParams -> model -> String
-    , hidden : String -> RouteParams -> model -> Bool
-    , disabled : String -> RouteParams -> model -> Bool
+    , title : RouteParams -> model -> String
+    , hidden : RouteParams -> model -> Bool
+    , disabled : RouteParams -> model -> Bool
     }
 
 
 type alias NavItemDataVisual model =
-    { title : String -> RouteParams -> model -> String
-    , hidden : String -> RouteParams -> model -> Bool
-    , disabled : String -> RouteParams -> model -> Bool
+    { title : RouteParams -> model -> String
+    , hidden : RouteParams -> model -> Bool
+    , disabled : RouteParams -> model -> Bool
     }
 
 
@@ -144,9 +145,9 @@ single title (Page p) =
         { page = p
         , pathParams = ElmAdmin.Router.parsePathParams p.path
         , hardParams = Dict.empty
-        , hidden = \_ _ _ -> False
-        , title = \_ _ _ -> title
-        , disabled = \_ _ _ -> False
+        , hidden = \_ _ -> False
+        , title = \_ _ -> title
+        , disabled = \_ _ -> False
         }
 
 
@@ -174,9 +175,9 @@ group title main items =
                     { page = p
                     , hardParams = Dict.empty
                     , pathParams = ElmAdmin.Router.parsePathParams p.path
-                    , hidden = \_ _ _ -> False
-                    , title = \_ _ _ -> title
-                    , disabled = \_ _ _ -> False
+                    , hidden = \_ _ -> False
+                    , title = \_ _ -> title
+                    , disabled = \_ _ -> False
                     }
                 , items = items
                 }
@@ -231,7 +232,7 @@ folderGroup title ((Page main_) as main__) items_ =
         main__
         [ visualGroup "" items_
             |> hidden
-                (\p _ _ -> not (Set.member p paths))
+                (\{ path } _ -> not (Set.member path paths))
         ]
 
 
@@ -249,9 +250,9 @@ visualGroup : String -> List (NavigationItem model msg) -> NavigationItem model 
 visualGroup title items =
     VisualGroup
         { main =
-            { hidden = \_ _ _ -> False
-            , title = \_ _ _ -> title
-            , disabled = \_ _ _ -> False
+            { hidden = \_ _ -> False
+            , title = \_ _ -> title
+            , disabled = \_ _ -> False
             }
         , items = items
         }
@@ -263,7 +264,7 @@ visualGroup title items =
         |> hidden (\_ model -> not (userIsAdmin model))
 
 -}
-hidden : (String -> RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
+hidden : (RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
 hidden fn a =
     case a of
         External _ _ ->
@@ -288,7 +289,7 @@ hidden fn a =
         |> disable (\_ model -> not (userIsAdmin model))
 
 -}
-disabled : (String -> RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
+disabled : (RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
 disabled fn a =
     case a of
         External _ _ ->
@@ -317,11 +318,81 @@ disabled fn a =
                         | disabled = fn
                         , page = { page_ | disabled = fn }
                     }
-                , items = items
+                , items =
+                    List.map (disableSubItem fn) items
                 }
 
         VisualGroup { main, items } ->
-            VisualGroup { main = { main | disabled = fn }, items = items }
+            VisualGroup
+                { main = { main | disabled = fn }
+                , items =
+                    List.map (disableSubItem fn) items
+                }
+
+
+{-| Used for propagating a parent disable across children.
+
+It grabs the current disable function and creates a new one that sums both checks.
+
+-}
+disableSubItem : (RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
+disableSubItem fn item =
+    let
+        sumDisabled : (RouteParams -> model -> Bool) -> RouteParams -> model -> Bool
+        sumDisabled fn2 routeParams model =
+            fn routeParams model || fn2 routeParams model
+    in
+    case item of
+        External _ _ ->
+            item
+
+        Url p ->
+            Url { p | disabled = sumDisabled p.disabled }
+
+        Single i ->
+            let
+                page_ : ElmAdmin.Model.Page model msg
+                page_ =
+                    i.page
+            in
+            Single
+                { i
+                    | disabled = sumDisabled i.disabled
+                    , page =
+                        { page_
+                            | disabled = sumDisabled page_.disabled
+                        }
+                }
+
+        Group { main, items } ->
+            let
+                page_ : ElmAdmin.Model.Page model msg
+                page_ =
+                    main.page
+            in
+            Group
+                { main =
+                    { main
+                        | disabled = sumDisabled main.disabled
+                        , page =
+                            { page_
+                                | disabled = sumDisabled page_.disabled
+                            }
+                    }
+                , items =
+                    List.map (disableSubItem fn) items
+                }
+
+        VisualGroup { main, items } ->
+            VisualGroup
+                { main =
+                    { main
+                        | disabled =
+                            sumDisabled main.disabled
+                    }
+                , items =
+                    List.map (disableSubItem fn) items
+                }
 
 
 {-| Dynamic nav link label.
@@ -334,7 +405,7 @@ disabled fn a =
             )
 
 -}
-dynamic : (String -> RouteParams -> model -> String) -> NavigationItem model msg -> NavigationItem model msg
+dynamic : (RouteParams -> model -> String) -> NavigationItem model msg -> NavigationItem model msg
 dynamic fn a =
     case a of
         External _ _ ->
@@ -411,7 +482,7 @@ page title path view =
         , update = \_ _ model -> ( model, Cmd.none )
         , subscriptions = \_ _ -> Sub.none
         , view = view
-        , disabled = \_ _ _ -> False
+        , disabled = \_ _ -> False
         }
 
 
@@ -454,7 +525,7 @@ fullPage path props =
         , update = props.update
         , subscriptions = props.subscriptions
         , view = props.view
-        , disabled = \_ _ _ -> False
+        , disabled = \_ _ -> False
         }
 
 
@@ -494,7 +565,7 @@ resourcePage path props =
         { path =
             pathFromString path
         , disabled =
-            \_ _ _ -> False
+            \_ _ -> False
         , title =
             \params_ model ->
                 props.title params_ model (props.resource params_ model)

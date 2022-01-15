@@ -13,7 +13,7 @@ import Browser exposing (UrlRequest(..))
 import Browser.Navigation
 import Dict exposing (Dict)
 import ElmAdmin.RouteParams exposing (RouteParams)
-import ElmAdmin.Router exposing (pathToString)
+import ElmAdmin.Router
 import ElmAdmin.Styles
 import ElmWidgets
 import Html exposing (..)
@@ -31,7 +31,7 @@ type alias ElmAdmin flags model msg =
 type alias Page model msg =
     { path : List String
     , title : RouteParams -> model -> String
-    , disabled : String -> RouteParams -> model -> Bool
+    , disabled : RouteParams -> model -> Bool
     , init : RouteParams -> model -> ( model, Cmd msg )
     , update : RouteParams -> msg -> model -> ( model, Cmd msg )
     , subscriptions : RouteParams -> model -> Sub msg
@@ -48,7 +48,6 @@ type alias Model model =
     { navKey : Browser.Navigation.Key
     , model : model
     , routeParams : RouteParams
-    , activePath : String
     , darkMode : Bool
     }
 
@@ -69,7 +68,7 @@ oneOfPage pageRouteCache url model =
     ElmAdmin.Router.oneOf .path pageRouteCache url
         |> Maybe.andThen
             (\( p, routeParams_ ) ->
-                if p.disabled (pathToString p.path) routeParams_ model then
+                if p.disabled routeParams_ model then
                     Nothing
 
                 else
@@ -115,7 +114,6 @@ init props flags url navKey =
     ( { navKey = navKey
       , model = initialPageModel
       , routeParams = routeParams
-      , activePath = activePath
       , darkMode = props.preferDarkMode
       }
     , Cmd.batch
@@ -149,20 +147,16 @@ update globalUpdate pages pageRouteCache msg model =
 
         OnUrlChange url ->
             case oneOfPage pageRouteCache url model.model of
-                Just ( page, routeParams ) ->
+                Just ( _, routeParams ) ->
                     ( { model
-                        | activePath = pagePathAsString page
-                        , routeParams = routeParams
+                        | routeParams = routeParams
                       }
                     , Cmd.none
                     )
 
                 Nothing ->
                     if url.path == "/" then
-                        ( { model
-                            | activePath = "/"
-                            , routeParams = ElmAdmin.RouteParams.empty
-                          }
+                        ( { model | routeParams = ElmAdmin.RouteParams.empty }
                         , Cmd.none
                         )
 
@@ -180,7 +174,7 @@ update globalUpdate pages pageRouteCache msg model =
                     globalUpdate model.routeParams msg_ model.model
 
                 ( model__, cmd_ ) =
-                    Dict.get model.activePath pages
+                    Dict.get model.routeParams.path pages
                         |> Maybe.map (\page -> page.update model.routeParams msg_ model_)
                         |> Maybe.withDefault ( model_, Cmd.none )
             in
@@ -194,10 +188,10 @@ subscriptions : (RouteParams -> model -> Sub msg) -> Dict String (Page model msg
 subscriptions globalSubscriptions pages model =
     let
         activePage =
-            Dict.get model.activePath pages
+            Dict.get model.routeParams.path pages
                 |> Maybe.andThen
                     (\p ->
-                        if p.disabled (pathToString p.path) model.routeParams model.model then
+                        if p.disabled model.routeParams model.model then
                             Nothing
 
                         else
@@ -227,10 +221,10 @@ view :
 view props pages navItems model =
     let
         activePage =
-            Dict.get model.activePath pages
+            Dict.get model.routeParams.path pages
                 |> Maybe.andThen
                     (\p ->
-                        if p.disabled (pathToString p.path) model.routeParams model.model then
+                        if p.disabled model.routeParams model.model then
                             Nothing
 
                         else
@@ -291,7 +285,7 @@ view props pages navItems model =
                           else
                             text ""
                         ]
-                    , UI.Nav.view model.activePath model.routeParams model.model navItems
+                    , UI.Nav.view model.routeParams model.model navItems
                     ]
                 , main_ [ class "eadm eadm-main" ]
                     [ activePageTitle

@@ -10,18 +10,18 @@ import Html.Attributes exposing (..)
 
 
 type alias ItemData model =
-    { title : String -> RouteParams -> model -> String
+    { title : RouteParams -> model -> String
     , path : String
     , pathParams : List String
-    , hidden : String -> RouteParams -> model -> Bool
-    , disabled : String -> RouteParams -> model -> Bool
+    , hidden : RouteParams -> model -> Bool
+    , disabled : RouteParams -> model -> Bool
     }
 
 
 type alias ItemDataVisual model =
-    { title : String -> RouteParams -> model -> String
-    , hidden : String -> RouteParams -> model -> Bool
-    , disabled : String -> RouteParams -> model -> Bool
+    { title : RouteParams -> model -> String
+    , hidden : RouteParams -> model -> Bool
+    , disabled : RouteParams -> model -> Bool
     }
 
 
@@ -38,16 +38,16 @@ type UINavItem model
         }
 
 
-viewItemVisualGroup : String -> RouteParams -> model -> ItemDataVisual model -> List (UINavItem model) -> Html msg
-viewItemVisualGroup activePath routeParams model item items =
-    viewVisible activePath
+viewItemVisualGroup : RouteParams -> model -> ItemDataVisual model -> List (UINavItem model) -> Html msg
+viewItemVisualGroup routeParams model item items =
+    viewVisible
         routeParams
         model
         item
         (\_ ->
             li
                 [ class "eadm eadm-nav-list-item" ]
-                [ case item.title activePath routeParams model of
+                [ case item.title routeParams model of
                     "" ->
                         text ""
 
@@ -56,7 +56,7 @@ viewItemVisualGroup activePath routeParams model item items =
                             [ class "eadm eadm-nav-item eadm-m-visual-group eadm-m-group" ]
                             [ text title ]
                 , if not (List.isEmpty items) then
-                    viewList activePath routeParams model items
+                    viewList routeParams model items
 
                   else
                     text ""
@@ -64,9 +64,9 @@ viewItemVisualGroup activePath routeParams model item items =
         )
 
 
-viewItemGroup : String -> RouteParams -> model -> ItemData model -> List (UINavItem model) -> Html msg
-viewItemGroup activePath routeParams model item items =
-    viewVisibleWithParams activePath
+viewItemGroup : RouteParams -> model -> ItemData model -> List (UINavItem model) -> Html msg
+viewItemGroup routeParams model item items =
+    viewVisibleWithParams
         routeParams
         model
         item
@@ -76,17 +76,17 @@ viewItemGroup activePath routeParams model item items =
                 [ a
                     [ href href_
                     , class "eadm eadm-nav-item eadm-m-group"
-                    , classList [ ( "eadm-m-active", activePath == item.path ) ]
+                    , classList [ ( "eadm-m-active", routeParams.path == item.path ) ]
                     ]
-                    [ text (item.title activePath routeParams model) ]
-                , viewList activePath routeParams model items
+                    [ text (item.title routeParams model) ]
+                , viewList routeParams model items
                 ]
         )
 
 
-viewItem : String -> RouteParams -> model -> ItemData model -> Html msg
-viewItem activePath routeParams model item =
-    viewVisibleWithParams activePath
+viewItem : RouteParams -> model -> ItemData model -> Html msg
+viewItem routeParams model item =
+    viewVisibleWithParams
         routeParams
         model
         item
@@ -96,26 +96,25 @@ viewItem activePath routeParams model item =
                 [ a
                     [ href href_
                     , class "eadm eadm-nav-item"
-                    , classList [ ( "eadm-m-active", activePath == item.path ) ]
+                    , classList [ ( "eadm-m-active", routeParams.path == item.path ) ]
                     ]
-                    [ text (item.title activePath routeParams model) ]
+                    [ text (item.title routeParams model) ]
                 ]
         )
 
 
 viewVisible :
-    String
-    -> RouteParams
+    RouteParams
     -> model
     ->
         { m
-            | hidden : String -> RouteParams -> model -> Bool
-            , disabled : String -> RouteParams -> model -> Bool
+            | hidden : RouteParams -> model -> Bool
+            , disabled : RouteParams -> model -> Bool
         }
     -> (() -> Html msg)
     -> Html msg
-viewVisible activePath routeParams model item render =
-    if not (item.hidden activePath routeParams model) && not (item.disabled activePath routeParams model) then
+viewVisible routeParams model item render =
+    if not (item.hidden routeParams model) && not (item.disabled routeParams model) then
         render ()
 
     else
@@ -123,14 +122,13 @@ viewVisible activePath routeParams model item render =
 
 
 viewVisibleWithParams :
-    String
-    -> RouteParams
+    RouteParams
     -> model
     -> ItemData model
     -> (String -> Html msg)
     -> Html msg
-viewVisibleWithParams activePath routeParams model item render =
-    viewVisible activePath
+viewVisibleWithParams routeParams model item render =
+    viewVisible
         routeParams
         model
         item
@@ -144,8 +142,8 @@ viewVisibleWithParams activePath routeParams model item render =
         )
 
 
-viewList : String -> RouteParams -> model -> List (UINavItem model) -> Html msg
-viewList activePath routeParams model items =
+viewList : RouteParams -> model -> List (UINavItem model) -> Html msg
+viewList routeParams model items =
     ul [ class "eadm eadm-nav-list" ]
         (items
             |> List.map
@@ -163,14 +161,12 @@ viewList activePath routeParams model items =
 
                         Single item ->
                             viewItem
-                                activePath
                                 routeParams
                                 model
                                 item
 
                         Group group ->
                             viewItemGroup
-                                activePath
                                 routeParams
                                 model
                                 group.main
@@ -178,7 +174,6 @@ viewList activePath routeParams model items =
 
                         VisualGroup group ->
                             viewItemVisualGroup
-                                activePath
                                 routeParams
                                 model
                                 group.main
@@ -187,8 +182,8 @@ viewList activePath routeParams model items =
         )
 
 
-view : String -> RouteParams -> model -> List (UINavItem model) -> Html msg
-view activePath routeParams model items =
+view : RouteParams -> model -> List (UINavItem model) -> Html msg
+view routeParams model items =
     nav [ class "eadm eadm-nav" ]
-        [ viewList activePath routeParams model items
+        [ viewList routeParams model items
         ]

@@ -103,7 +103,8 @@ fromUrl target url =
     pathParams target path
         |> Maybe.map
             (\pathParams_ ->
-                { pathParams = pathParams_
+                { path = pathToString target
+                , pathParams = pathParams_
                 , queryParams = queryParams url.query
                 }
             )

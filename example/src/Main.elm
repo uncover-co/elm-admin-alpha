@@ -12,7 +12,7 @@ type Msg
 
 
 type alias Model =
-    ()
+    { value : Bool }
 
 
 page : String -> String -> A.Page Model Msg
@@ -69,7 +69,7 @@ main : ElmAdmin () Model Msg
 main =
     admin
         { title = "Admin"
-        , init = \_ _ -> ( (), Cmd.none )
+        , init = \_ _ -> ( { value = False }, Cmd.none )
         , update = \_ _ model -> ( model, Cmd.none )
         , subscriptions = \_ _ -> Sub.none
         , options = []
@@ -89,5 +89,6 @@ main =
                 workspacesIndex
                 [ A.single "Create" workspacesCreate
                 ]
+                |> A.disabled (\_ { value } -> value == False)
             ]
         }
