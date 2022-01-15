@@ -181,7 +181,7 @@ update globalUpdate pages pageRouteCache msg model =
 
                 ( model__, cmd_ ) =
                     Dict.get model.activePath pages
-                        |> Maybe.map (\page -> page.update model.routeParams msg_ model.model)
+                        |> Maybe.map (\page -> page.update model.routeParams msg_ model_)
                         |> Maybe.withDefault ( model_, Cmd.none )
             in
             ( { model | model = model__ }
