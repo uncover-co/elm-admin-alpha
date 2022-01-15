@@ -65,15 +65,22 @@ workspacesCreate =
     page "Workspaces" "/workspaces/new"
 
 
+protectedPage : A.Page Bool Msg
+protectedPage =
+    A.page "/protected"
+        "Protected"
+        (\_ _ -> div [] [ text "Protected" ])
+
+
 main : ElmAdmin () Model Msg
 main =
-    admin
-        { title = "Admin"
-        , init = \_ _ -> ( { value = False }, Cmd.none )
+    admin "Admin"
+        { init = \_ _ -> ( { value = False }, Cmd.none )
         , update = \_ _ model -> ( model, Cmd.none )
         , subscriptions = \_ _ -> Sub.none
-        , options = []
-        , pages =
+        }
+        [ A.theme [ A.preferDarkMode ]
+        , A.pages
             [ A.external "Docs" "https://package.elm-lang.org/"
             , A.visualGroup "Intro"
                 [ A.single "First steps" (page "First Steps" "/first-steps")
@@ -91,4 +98,10 @@ main =
                 ]
                 |> A.disabled (\_ { value } -> value == False)
             ]
-        }
+        , A.protectedPages
+            { fromModel = \{ value } -> Just value
+            , toModel = \model _ -> model
+            }
+            [ A.single "Protected" protectedPage
+            ]
+        ]

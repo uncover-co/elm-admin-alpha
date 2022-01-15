@@ -4,6 +4,8 @@ module ElmAdmin.Model exposing
     , Msg(..)
     , Page
     , init
+    , oneOfPage
+    , postUpdate
     , subscriptions
     , update
     , view
@@ -31,11 +33,11 @@ type alias ElmAdmin flags model msg =
 type alias Page model msg =
     { path : List String
     , title : RouteParams -> model -> String
-    , disabled : RouteParams -> model -> Bool
     , init : RouteParams -> model -> ( model, Cmd msg )
     , update : RouteParams -> msg -> model -> ( model, Cmd msg )
     , subscriptions : RouteParams -> model -> Sub msg
     , view : RouteParams -> model -> Html msg
+    , disabled : RouteParams -> model -> Bool
     }
 
 
@@ -59,8 +61,8 @@ oneOfPage :
     -> Url
     -> model
     -> Maybe ( Page model msg, RouteParams )
-oneOfPage pageRouteCache url model =
-    ElmAdmin.Router.oneOf .path pageRouteCache url
+oneOfPage pageRoutes url model =
+    ElmAdmin.Router.oneOf .path pageRoutes url
         |> Maybe.andThen
             (\( p, routeParams_ ) ->
                 if p.disabled routeParams_ model then
@@ -72,8 +74,11 @@ oneOfPage pageRouteCache url model =
 
 
 init :
-    { pageRoutes : Dict String (List (Page model msg))
-    , initModel : flags -> Browser.Navigation.Key -> ( model, Cmd msg )
+    { init : flags -> Browser.Navigation.Key -> ( model, Cmd msg )
+    , pageRoutes : Dict String (List (Page model msg))
+    , protectedPageRoutes : Dict String (List (Page protectedModel msg))
+    , protectedModel : model -> Maybe protectedModel
+    , protectedToModel : model -> protectedModel -> model
     , preferDarkMode : Bool
     }
     -> flags
@@ -82,32 +87,66 @@ init :
     -> ( Model model, Cmd (Msg msg) )
 init props flags url navKey =
     let
-        ( initialModel, initialCmd ) =
-            props.initModel flags navKey
+        ( initialModel_, initialCmd ) =
+            props.init flags navKey
 
-        activePage : Maybe ( Page model msg, RouteParams )
-        activePage =
-            oneOfPage props.pageRoutes url initialModel
+        ( initialModel, initialPageCmd, activeRouteParams ) =
+            case props.protectedModel initialModel_ of
+                Just protectedModel ->
+                    let
+                        activePage : Maybe ( Page protectedModel msg, RouteParams )
+                        activePage =
+                            oneOfPage props.protectedPageRoutes url protectedModel
 
-        ( initialPageModel, initialPageCmd ) =
-            activePage
-                |> Maybe.map (\( page, routeParams_ ) -> page.init routeParams_ initialModel)
-                |> Maybe.withDefault ( initialModel, initialCmd )
+                        activeRouteParams_ : Maybe RouteParams
+                        activeRouteParams_ =
+                            activePage
+                                |> Maybe.map Tuple.second
+                    in
+                    activePage
+                        |> Maybe.map (\( p, r ) -> p.init r protectedModel)
+                        |> Maybe.withDefault ( protectedModel, Cmd.none )
+                        |> (\( protectedModel_, cmd_ ) ->
+                                ( props.protectedToModel initialModel_ protectedModel_
+                                , cmd_
+                                , activeRouteParams_
+                                )
+                           )
+
+                Nothing ->
+                    let
+                        activePage : Maybe ( Page model msg, RouteParams )
+                        activePage =
+                            oneOfPage props.pageRoutes url initialModel_
+
+                        activeRouteParams_ : Maybe RouteParams
+                        activeRouteParams_ =
+                            activePage
+                                |> Maybe.map Tuple.second
+                    in
+                    activePage
+                        |> Maybe.map (\( p, r ) -> p.init r initialModel_)
+                        |> Maybe.withDefault ( initialModel_, Cmd.none )
+                        |> (\( initialModel__, cmd_ ) ->
+                                ( initialModel__
+                                , cmd_
+                                , activeRouteParams_
+                                )
+                           )
 
         routeParams =
-            activePage
-                |> Maybe.map Tuple.second
+            activeRouteParams
                 |> Maybe.withDefault ElmAdmin.RouteParams.empty
 
         adminCmd =
-            if activePage == Nothing && url.path /= "/" then
+            if activeRouteParams == Nothing && url.path /= "/" then
                 Browser.Navigation.replaceUrl navKey "/"
 
             else
                 Cmd.none
     in
     ( { navKey = navKey
-      , model = initialPageModel
+      , model = initialModel
       , routeParams = routeParams
       , darkMode = props.preferDarkMode
       }
@@ -120,13 +159,22 @@ init props flags url navKey =
 
 
 update :
-    (RouteParams -> msg -> model -> ( model, Cmd msg ))
-    -> Dict String (Page model msg)
-    -> Dict String (List (Page model msg))
+    { update : RouteParams -> msg -> model -> ( model, Cmd msg )
+    , pages : Dict String (Page model msg)
+    , protectedPages : Dict String (Page protectedModel msg)
+    , pageRoutes : Dict String (List (Page model msg))
+    , protectedPageRoutes : Dict String (List (Page protectedModel msg))
+    , protectedModel : model -> Maybe protectedModel
+    , protectedToModel : model -> protectedModel -> model
+    }
     -> Msg msg
     -> Model model
     -> ( Model model, Cmd (Msg msg) )
-update globalUpdate pages pageRouteCache msg model =
+update props msg model =
+    let
+        protectedModel =
+            props.protectedModel model.model
+    in
     case msg of
         OnUrlRequest request ->
             case request of
@@ -141,11 +189,20 @@ update globalUpdate pages pageRouteCache msg model =
                     )
 
         OnUrlChange url ->
-            case oneOfPage pageRouteCache url model.model of
-                Just ( _, routeParams ) ->
-                    ( { model
-                        | routeParams = routeParams
-                      }
+            let
+                activeRouteParams =
+                    case protectedModel of
+                        Just protectedModel_ ->
+                            oneOfPage props.protectedPageRoutes url protectedModel_
+                                |> Maybe.map Tuple.second
+
+                        Nothing ->
+                            oneOfPage props.pageRoutes url model.model
+                                |> Maybe.map Tuple.second
+            in
+            case activeRouteParams of
+                Just routeParams ->
+                    ( { model | routeParams = routeParams }
                     , Cmd.none
                     )
 
@@ -166,12 +223,23 @@ update globalUpdate pages pageRouteCache msg model =
         Msg msg_ ->
             let
                 ( model_, cmd ) =
-                    globalUpdate model.routeParams msg_ model.model
+                    props.update model.routeParams msg_ model.model
 
                 ( model__, cmd_ ) =
-                    Dict.get model.routeParams.path pages
-                        |> Maybe.map (\page -> page.update model.routeParams msg_ model_)
-                        |> Maybe.withDefault ( model_, Cmd.none )
+                    case protectedModel of
+                        Just protectedModel_ ->
+                            Dict.get model.routeParams.path props.protectedPages
+                                |> Maybe.map
+                                    (\page ->
+                                        page.update model.routeParams msg_ protectedModel_
+                                            |> Tuple.mapFirst (props.protectedToModel model_)
+                                    )
+                                |> Maybe.withDefault ( model_, Cmd.none )
+
+                        Nothing ->
+                            Dict.get model.routeParams.path props.pages
+                                |> Maybe.map (\page -> page.update model.routeParams msg_ model_)
+                                |> Maybe.withDefault ( model_, Cmd.none )
             in
             ( { model | model = model__ }
             , Cmd.batch [ cmd, cmd_ ]
@@ -179,87 +247,146 @@ update globalUpdate pages pageRouteCache msg model =
             )
 
 
-subscriptions : (RouteParams -> model -> Sub msg) -> Dict String (Page model msg) -> Model model -> Sub (Msg msg)
-subscriptions globalSubscriptions pages model =
-    let
-        activePage =
-            Dict.get model.routeParams.path pages
-                |> Maybe.andThen
-                    (\p ->
-                        if p.disabled model.routeParams model.model then
-                            Nothing
+postUpdate :
+    { previousModel : Model model
+    , pages : Dict String (Page model msg)
+    , protectedPages : Dict String (Page protectedPages msg)
+    , protectedModel : model -> Maybe protectedModel
+    , protectedToModel : model -> protectedModel -> model
+    }
+    -> ( Model model, Cmd (Msg msg) )
+    -> ( Model model, Cmd (Msg msg) )
+postUpdate _ ( model, cmd ) =
+    ( model, cmd )
 
-                        else
-                            Just p
-                    )
+
+subscriptions :
+    { subscriptions : RouteParams -> model -> Sub msg
+    , pages : Dict String (Page model msg)
+    , protectedPages : Dict String (Page protectedModel msg)
+    , protectedModel : model -> Maybe protectedModel
+    , protectedToModel : model -> protectedModel -> model
+    }
+    -> Model model
+    -> Sub (Msg msg)
+subscriptions props model =
+    let
+        activePageSubscriptions =
+            case props.protectedModel model.model of
+                Just protectedModel_ ->
+                    Dict.get model.routeParams.path props.protectedPages
+                        |> Maybe.andThen
+                            (\p ->
+                                if p.disabled model.routeParams protectedModel_ then
+                                    Nothing
+
+                                else
+                                    Just p
+                            )
+                        |> Maybe.map (\page -> page.subscriptions model.routeParams protectedModel_)
+                        |> Maybe.withDefault Sub.none
+
+                Nothing ->
+                    Dict.get model.routeParams.path props.pages
+                        |> Maybe.andThen
+                            (\p ->
+                                if p.disabled model.routeParams model.model then
+                                    Nothing
+
+                                else
+                                    Just p
+                            )
+                        |> Maybe.map (\page -> page.subscriptions model.routeParams model.model)
+                        |> Maybe.withDefault Sub.none
     in
     Sub.batch
-        [ globalSubscriptions model.routeParams model.model
-        , activePage
-            |> Maybe.map (\page -> page.subscriptions model.routeParams model.model)
-            |> Maybe.withDefault Sub.none
+        [ props.subscriptions model.routeParams model.model
+        , activePageSubscriptions
         ]
         |> Sub.map Msg
 
 
 view :
     { title : String
-    , lightTheme : ThemeSpec.Theme
-    , darkTheme : ThemeSpec.Theme
-    , darkModeClass : String
-    , preventDarkMode : Bool
+    , navItems : List (UINavItem model)
+    , protectedNavItems : List (UINavItem protectedModel)
+    , pages : Dict String (Page model msg)
+    , protectedPages : Dict String (Page protectedModel msg)
+    , protectedModel : model -> Maybe protectedModel
+    , theme :
+        { lightTheme : ThemeSpec.Theme
+        , darkTheme : ThemeSpec.Theme
+        , darkModeStrategy : ThemeSpec.DarkModeStrategy
+        , preventDarkMode : Bool
+        }
     }
-    -> Dict String (Page model msg)
-    -> List (UINavItem model)
     -> Model model
     -> Browser.Document (Msg msg)
-view props pages navItems model =
+view props model =
     let
-        activePage =
-            Dict.get model.routeParams.path pages
-                |> Maybe.andThen
-                    (\p ->
-                        if p.disabled model.routeParams model.model then
-                            Nothing
+        protectedModel =
+            props.protectedModel model.model
 
-                        else
-                            Just p
-                    )
+        ( activePageTitle, activePageView ) =
+            case protectedModel of
+                Just protectedModel_ ->
+                    Dict.get model.routeParams.path props.protectedPages
+                        |> Maybe.andThen
+                            (\p ->
+                                if p.disabled model.routeParams protectedModel_ then
+                                    Nothing
 
-        activePageTitle =
-            activePage
-                |> Maybe.map
-                    (\page ->
-                        h2
-                            [ class "eadm eadm-page-title" ]
-                            [ text (page.title model.routeParams model.model)
-                            ]
-                    )
-                |> Maybe.withDefault (text "")
+                                else
+                                    Just p
+                            )
+                        |> Maybe.map
+                            (\p ->
+                                ( h2
+                                    [ class "eadm eadm-page-title" ]
+                                    [ text (p.title model.routeParams protectedModel_)
+                                    ]
+                                , p.view model.routeParams protectedModel_
+                                    |> Html.map Msg
+                                )
+                            )
+                        |> Maybe.withDefault ( text "", text "" )
 
-        activePageView =
-            activePage
-                |> Maybe.map
-                    (\page ->
-                        page.view model.routeParams model.model
-                            |> Html.map Msg
-                    )
-                |> Maybe.withDefault (text "")
+                Nothing ->
+                    Dict.get model.routeParams.path props.pages
+                        |> Maybe.andThen
+                            (\p ->
+                                if p.disabled model.routeParams model.model then
+                                    Nothing
+
+                                else
+                                    Just p
+                            )
+                        |> Maybe.map
+                            (\p ->
+                                ( h2
+                                    [ class "eadm eadm-page-title" ]
+                                    [ text (p.title model.routeParams model.model)
+                                    ]
+                                , p.view model.routeParams model.model
+                                    |> Html.map Msg
+                                )
+                            )
+                        |> Maybe.withDefault ( text "", text "" )
     in
     { title = props.title
     , body =
-        [ if props.preventDarkMode then
-            ThemeSpec.globalProvider props.lightTheme
+        [ if props.theme.preventDarkMode then
+            ThemeSpec.globalProvider props.theme.lightTheme
 
           else
             ThemeSpec.globalProviderWithDarkMode
-                { light = props.lightTheme
-                , dark = props.darkTheme
-                , strategy = ThemeSpec.ClassStrategy props.darkModeClass
+                { light = props.theme.lightTheme
+                , dark = props.theme.darkTheme
+                , strategy = props.theme.darkModeStrategy
                 }
         , ElmWidgets.globalStyles
         , ElmAdmin.Styles.globalStyles
-        , div [ classList [ ( props.darkModeClass, model.darkMode ) ] ]
+        , div [ classList [ ( "eadm-dark", model.darkMode ) ] ]
             [ div [ class "eadm eadm-wrapper" ]
                 [ aside [ class "eadm eadm-sidebar" ]
                     [ header [ class "eadm eadm-sidebar-header" ]
@@ -270,17 +397,22 @@ view props pages navItems model =
                                 ]
                                 [ text props.title ]
                             ]
-                        , if not props.preventDarkMode then
+                        , if not props.theme.preventDarkMode && props.theme.darkModeStrategy /= ThemeSpec.SystemStrategy then
                             button
                                 [ class "eadm eadm-sidebar-dark-btn"
                                 , HE.onClick ToggleDarkMode
                                 ]
-                                [ text "D" ]
+                                [ text "☀" ]
 
                           else
                             text ""
                         ]
-                    , UI.Nav.view model.routeParams model.model navItems
+                    , case protectedModel of
+                        Just protectedModel_ ->
+                            UI.Nav.view model.routeParams protectedModel_ props.protectedNavItems
+
+                        Nothing ->
+                            UI.Nav.view model.routeParams model.model props.navItems
                     ]
                 , main_ [ class "eadm eadm-main" ]
                     [ activePageTitle

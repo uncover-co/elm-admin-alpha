@@ -4,6 +4,7 @@ module ElmAdmin exposing
     , dynamic, params, hidden, disabled, Options
     , page, fullPage, resourcePage, Page, RouteParams
     , preferDarkMode, preventDarkMode, darkTheme, lightTheme, darkModeClass
+    , pages, protectedPages, theme
     )
 
 {-|
@@ -38,13 +39,14 @@ module ElmAdmin exposing
 import Browser
 import Browser.Navigation exposing (..)
 import Dict exposing (Dict)
-import ElmAdmin.Model exposing (Msg(..), subscriptions, update, view)
+import ElmAdmin.Model exposing (Msg(..))
 import ElmAdmin.Router exposing (parsePathParams, pathFromString, pathToString)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Set exposing (Set)
 import ThemeSpec
 import UI.Nav
+import Url exposing (Url)
 
 
 
@@ -550,7 +552,7 @@ fullPage path props =
 resourcePage :
     String
     ->
-        { resource : RouteParams -> model -> resource
+        { resource : RouteParams -> model -> Maybe resource
         , title : RouteParams -> model -> resource -> String
         , init : RouteParams -> model -> resource -> ( model, Cmd msg )
         , update : RouteParams -> msg -> model -> resource -> ( model, Cmd msg )
@@ -566,19 +568,29 @@ resourcePage path props =
             \_ _ -> False
         , title =
             \params_ model ->
-                props.title params_ model (props.resource params_ model)
+                props.resource params_ model
+                    |> Maybe.map (props.title params_ model)
+                    |> Maybe.withDefault ""
         , init =
             \params_ model ->
-                props.init params_ model (props.resource params_ model)
+                props.resource params_ model
+                    |> Maybe.map (props.init params_ model)
+                    |> Maybe.withDefault ( model, Cmd.none )
         , update =
             \params_ msg model ->
-                props.update params_ msg model (props.resource params_ model)
+                props.resource params_ model
+                    |> Maybe.map (props.update params_ msg model)
+                    |> Maybe.withDefault ( model, Cmd.none )
         , subscriptions =
             \params_ model ->
-                props.subscriptions params_ model (props.resource params_ model)
+                props.resource params_ model
+                    |> Maybe.map (props.subscriptions params_ model)
+                    |> Maybe.withDefault Sub.none
         , view =
             \params_ model ->
-                props.view params_ model (props.resource params_ model)
+                props.resource params_ model
+                    |> Maybe.map (props.view params_ model)
+                    |> Maybe.withDefault (div [] [])
         }
 
 
@@ -587,69 +599,145 @@ resourcePage path props =
 
 
 {-| -}
-type Options
-    = Options OptionsData
+type ThemeOptions
+    = ThemeOptions ThemeOptionsData
 
 
-type alias OptionsData =
+type alias ThemeOptionsData =
     { lightTheme : ThemeSpec.Theme
     , darkTheme : ThemeSpec.Theme
     , preferDarkMode : Bool
     , preventDarkMode : Bool
-    , darkModeClass : String
+    , darkModeStrategy : ThemeSpec.DarkModeStrategy
     }
 
 
-defaultOptions : Options
-defaultOptions =
-    Options
+themeDefaults : ThemeOptions
+themeDefaults =
+    ThemeOptions
         { preferDarkMode = False
         , preventDarkMode = False
         , lightTheme = ThemeSpec.lightTheme
         , darkTheme = ThemeSpec.darkTheme
-        , darkModeClass = "eadm-dark"
+        , darkModeStrategy = ThemeSpec.ClassStrategy "eadm-dark"
         }
+
+
+{-| Customize your admin theme through a list of options.
+-}
+theme : List (ThemeOptions -> ThemeOptions) -> Options model protectedModel msg -> Options model protectedModel msg
+theme theme_ (Options options) =
+    Options { options | theme = List.foldl (\fn a -> fn a) themeDefaults theme_ }
 
 
 {-| Starts the admin on dark mode.
 -}
-preferDarkMode : Options -> Options
-preferDarkMode (Options options) =
-    Options { options | preferDarkMode = True }
+preferDarkMode : ThemeOptions -> ThemeOptions
+preferDarkMode (ThemeOptions options) =
+    ThemeOptions { options | preferDarkMode = True }
 
 
 {-| Removes the dark/light mode functionality.
 -}
-preventDarkMode : Options -> Options
-preventDarkMode (Options options) =
-    Options { options | preventDarkMode = True }
+preventDarkMode : ThemeOptions -> ThemeOptions
+preventDarkMode (ThemeOptions options) =
+    ThemeOptions { options | preventDarkMode = True }
 
 
-{-| Sets the class added to the DOM when dark mode is on.
+{-| Sets the dark mode strategy. Check out [elm-theme-spec](https://package.elm-lang.org/packages/uncover-co/elm-theme-spec/latest/) for more.
 
-Tip: If you're using tailwind's `dark:` variants you might want to set this to `"dark"`.
+Tip: If you're using tailwind's `dark:` variants you might want to set this to `ThemeSpec.ClassStrategy "dark"`.
 
 -}
-darkModeClass : String -> Options -> Options
-darkModeClass class_ (Options options) =
-    Options { options | darkModeClass = class_ }
+darkModeClass : ThemeSpec.DarkModeStrategy -> ThemeOptions -> ThemeOptions
+darkModeClass strategy (ThemeOptions options) =
+    ThemeOptions { options | darkModeStrategy = strategy }
 
 
 {-| Sets the theme used on light mode.
 -}
-lightTheme : ThemeSpec.Theme -> Options -> Options
-lightTheme theme (Options options) =
-    Options { options | lightTheme = theme }
+lightTheme : ThemeSpec.Theme -> ThemeOptions -> ThemeOptions
+lightTheme theme_ (ThemeOptions options) =
+    ThemeOptions { options | lightTheme = theme_ }
 
 
 {-| Sets the theme used on dark mode.
 -}
-darkTheme : ThemeSpec.Theme -> Options -> Options
-darkTheme theme (Options options) =
-    Options { options | lightTheme = theme }
+darkTheme : ThemeSpec.Theme -> ThemeOptions -> ThemeOptions
+darkTheme theme_ (ThemeOptions options) =
+    ThemeOptions { options | lightTheme = theme_ }
+
+
+{-| -}
+type Options model protectedModel msg
+    = Options (OptionsData model protectedModel msg)
+
+
+type alias OptionsData model protectedModel msg =
+    { theme : ThemeOptions
+    , pages : List (NavigationItem model msg)
+    , protectedPages : List (NavigationItem protectedModel msg)
+    , protectedModel : model -> Maybe protectedModel
+    , protectedToModel : model -> protectedModel -> model
+    }
+
+
+defaultOptions : Options model protectedModel msg
+defaultOptions =
+    Options
+        { theme = themeDefaults
+        , pages = []
+        , protectedPages = []
+        , protectedModel = \_ -> Nothing
+        , protectedToModel = \model _ -> model
+        }
+
+
+{-| Defines a list of pages for your application.
+-}
+pages : List (NavigationItem model msg) -> Options model protectedModel msg -> Options model protectedModel msg
+pages pages_ (Options options) =
+    Options { options | pages = pages_ }
+
+
+{-| Defines a list of pages for your application.
+-}
+protectedPages :
+    { fromModel : model -> Maybe protectedModel
+    , toModel : model -> protectedModel -> model
+    }
+    -> List (NavigationItem protectedModel msg)
+    -> Options model protectedModel msg
+    -> Options model protectedModel msg
+protectedPages { fromModel, toModel } protectedPages_ (Options options) =
+    Options
+        { options
+            | protectedPages = protectedPages_
+            , protectedModel = fromModel
+            , protectedToModel = toModel
+        }
 
 
 {-| Bootstraps your admin application.
+
+    admin "My Admin"
+        { init = init
+        , update = update
+        , subscriptions = subscriptions
+        }
+        [ theme
+            [ preferDarkMode
+            , darkTheme ...
+            ]
+        , pages
+            [  ]
+        , protectedPages
+            { fromModel : \model -> signedIn model
+            , toModel : identity
+            }
+            [ A.single
+            ]
+        ]
 
     admin
         { title = "My Admin"
@@ -677,24 +765,30 @@ darkTheme theme (Options options) =
 
 -}
 admin :
-    { title : String
-    , init : flags -> Browser.Navigation.Key -> ( model, Cmd msg )
-    , update : RouteParams -> msg -> model -> ( model, Cmd msg )
-    , subscriptions : RouteParams -> model -> Sub msg
-    , options : List (Options -> Options)
-    , pages : List (NavigationItem model msg)
-    }
+    String
+    ->
+        { init : flags -> Browser.Navigation.Key -> ( model, Cmd msg )
+        , update : RouteParams -> msg -> model -> ( model, Cmd msg )
+        , subscriptions : RouteParams -> model -> Sub msg
+        }
+    -> List (Options model protectedModel msg -> Options model protectedModel msg)
     -> ElmAdmin flags model msg
-admin props =
+admin title props options_ =
     let
-        options : OptionsData
+        options : OptionsData model protectedModel msg
         options =
-            List.foldl (\fn a -> fn a) defaultOptions props.options
+            List.foldl (\fn a -> fn a) defaultOptions options_
                 |> (\(Options o) -> o)
 
+        theme_ : ThemeOptionsData
+        theme_ =
+            case options.theme of
+                ThemeOptions d ->
+                    d
+
         pagesDataList_ :
-            List (NavigationItem model msg)
-            -> List (ElmAdmin.Model.Page model msg)
+            List (NavigationItem m msg)
+            -> List (ElmAdmin.Model.Page m msg)
         pagesDataList_ xs =
             xs
                 |> List.foldl
@@ -719,18 +813,37 @@ admin props =
 
         pagesDataList : List (ElmAdmin.Model.Page model msg)
         pagesDataList =
-            pagesDataList_ props.pages
+            pagesDataList_ options.pages
+
+        protectedPagesDataList : List (ElmAdmin.Model.Page protectedModel msg)
+        protectedPagesDataList =
+            pagesDataList_ options.protectedPages
 
         pageRoutes : Dict String (List (ElmAdmin.Model.Page model msg))
         pageRoutes =
             ElmAdmin.Router.toCache .path pagesDataList
 
-        pages : Dict String (ElmAdmin.Model.Page model msg)
-        pages =
+        protectedPageRoutes : Dict String (List (ElmAdmin.Model.Page protectedModel msg))
+        protectedPageRoutes =
+            ElmAdmin.Router.toCache .path protectedPagesDataList
+
+        pages_ : Dict String (ElmAdmin.Model.Page model msg)
+        pages_ =
             pagesDataList
                 |> List.map
                     (\page_ ->
-                        ( "/" ++ String.join "/" page_.path
+                        ( pathToString page_.path
+                        , page_
+                        )
+                    )
+                |> Dict.fromList
+
+        protectedPages_ : Dict String (ElmAdmin.Model.Page protectedModel msg)
+        protectedPages_ =
+            protectedPagesDataList
+                |> List.map
+                    (\page_ ->
+                        ( pathToString page_.path
                         , page_
                         )
                     )
@@ -738,98 +851,120 @@ admin props =
 
         viewNavItems : List (UI.Nav.UINavItem model)
         viewNavItems =
-            let
-                applyHardParams : List String -> Dict String String -> List String
-                applyHardParams path hardParams =
-                    path
-                        |> List.map
-                            (\p ->
-                                if String.startsWith ":" p then
-                                    Dict.get p hardParams
-                                        |> Maybe.withDefault p
+            viewNavItemsFromNavigatiomItems options.pages
 
-                                else
-                                    p
-                            )
-
-                viewNavItem_ : List (NavigationItem model msg) -> List (UI.Nav.UINavItem model)
-                viewNavItem_ navItems_ =
-                    navItems_
-                        |> List.foldl
-                            (\navItem acc ->
-                                case navItem of
-                                    External label href_ ->
-                                        UI.Nav.External label href_ :: acc
-
-                                    Url _ ->
-                                        acc
-
-                                    Single navItem_ ->
-                                        let
-                                            path =
-                                                applyHardParams navItem_.page.path navItem_.hardParams
-                                        in
-                                        UI.Nav.Single
-                                            { title = navItem_.title
-                                            , path = pathToString path
-                                            , pathParams = parsePathParams path
-                                            , hidden = navItem_.hidden
-                                            , disabled = navItem_.disabled
-                                            }
-                                            :: acc
-
-                                    Group { main, items } ->
-                                        let
-                                            path =
-                                                applyHardParams main.page.path main.hardParams
-                                        in
-                                        UI.Nav.Group
-                                            { main =
-                                                { title = main.title
-                                                , path = pathToString path
-                                                , pathParams = parsePathParams path
-                                                , hidden = main.hidden
-                                                , disabled = main.disabled
-                                                }
-                                            , items = viewNavItem_ items
-                                            }
-                                            :: acc
-
-                                    VisualGroup { main, items } ->
-                                        UI.Nav.VisualGroup
-                                            { main =
-                                                { title = main.title
-                                                , hidden = main.hidden
-                                                , disabled = main.disabled
-                                                }
-                                            , items = viewNavItem_ items
-                                            }
-                                            :: acc
-                            )
-                            []
-                        |> List.reverse
-            in
-            viewNavItem_ props.pages
+        viewProtectedNavItems : List (UI.Nav.UINavItem protectedModel)
+        viewProtectedNavItems =
+            viewNavItemsFromNavigatiomItems options.protectedPages
     in
     Browser.application
         { onUrlChange = OnUrlChange
         , onUrlRequest = OnUrlRequest
         , init =
             ElmAdmin.Model.init
-                { pageRoutes = pageRoutes
-                , initModel = props.init
-                , preferDarkMode = options.preferDarkMode
+                { init = props.init
+                , pageRoutes = pageRoutes
+                , protectedPageRoutes = protectedPageRoutes
+                , protectedModel = options.protectedModel
+                , protectedToModel = options.protectedToModel
+                , preferDarkMode = theme_.preferDarkMode
                 }
-        , update = update props.update pages pageRoutes
-        , subscriptions = subscriptions props.subscriptions pages
+        , update =
+            \msg model ->
+                ElmAdmin.Model.update
+                    { update = props.update
+                    , pages = pages_
+                    , protectedPages = protectedPages_
+                    , pageRoutes = pageRoutes
+                    , protectedPageRoutes = protectedPageRoutes
+                    , protectedModel = options.protectedModel
+                    , protectedToModel = options.protectedToModel
+                    }
+                    msg
+                    model
+                    |> ElmAdmin.Model.postUpdate
+                        { previousModel = model
+                        , pages = pages_
+                        , protectedPages = protectedPages_
+                        , protectedModel = options.protectedModel
+                        , protectedToModel = options.protectedToModel
+                        }
+        , subscriptions =
+            ElmAdmin.Model.subscriptions
+                { subscriptions = props.subscriptions
+                , pages = pages_
+                , protectedPages = protectedPages_
+                , protectedModel = options.protectedModel
+                , protectedToModel = options.protectedToModel
+                }
         , view =
-            view
-                { title = props.title
-                , preventDarkMode = options.preventDarkMode
-                , darkModeClass = options.darkModeClass
-                , lightTheme = options.lightTheme
-                , darkTheme = options.darkTheme
+            ElmAdmin.Model.view
+                { title = title
+                , navItems = viewNavItems
+                , protectedNavItems = viewProtectedNavItems
+                , pages = pages_
+                , protectedPages = protectedPages_
+                , protectedModel = options.protectedModel
+                , theme =
+                    { lightTheme = theme_.lightTheme
+                    , darkTheme = theme_.darkTheme
+                    , darkModeStrategy = theme_.darkModeStrategy
+                    , preventDarkMode = theme_.preventDarkMode
+                    }
                 }
-                pages
-                viewNavItems
         }
+
+
+viewNavItemsFromNavigatiomItems : List (NavigationItem m msg) -> List (UI.Nav.UINavItem m)
+viewNavItemsFromNavigatiomItems ps =
+    let
+        go : List (NavigationItem m msg) -> List (UI.Nav.UINavItem m)
+        go navItems_ =
+            navItems_
+                |> List.foldl
+                    (\navItem acc ->
+                        case navItem of
+                            External label href_ ->
+                                UI.Nav.External label href_ :: acc
+
+                            Url _ ->
+                                acc
+
+                            Single navItem_ ->
+                                UI.Nav.Single
+                                    { title = navItem_.title
+                                    , path = pathToString navItem_.page.path
+                                    , pathParams = parsePathParams navItem_.page.path
+                                    , hidden = navItem_.hidden
+                                    , disabled = navItem_.disabled
+                                    }
+                                    :: acc
+
+                            Group { main, items } ->
+                                UI.Nav.Group
+                                    { main =
+                                        { title = main.title
+                                        , path = pathToString main.page.path
+                                        , pathParams = parsePathParams main.page.path
+                                        , hidden = main.hidden
+                                        , disabled = main.disabled
+                                        }
+                                    , items = go items
+                                    }
+                                    :: acc
+
+                            VisualGroup { main, items } ->
+                                UI.Nav.VisualGroup
+                                    { main =
+                                        { title = main.title
+                                        , hidden = main.hidden
+                                        , disabled = main.disabled
+                                        }
+                                    , items = go items
+                                    }
+                                    :: acc
+                    )
+                    []
+                |> List.reverse
+    in
+    go ps
