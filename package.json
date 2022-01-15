@@ -1,6 +1,6 @@
 {
   "name": "elm-admin",
-  "version": "2.0.1",
+  "version": "3.0.0",
   "description": "An Elm framework for building admin applications.",
   "scripts": {
     "postinstall": "elm-tooling install",
