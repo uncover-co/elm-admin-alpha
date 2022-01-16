@@ -1,10 +1,9 @@
 module ElmAdmin exposing
-    ( admin, ElmAdmin
+    ( admin, pages, protectedPages, theme, ElmAdmin
     , single, url, external, group, visualGroup, folderGroup, NavigationItem
     , dynamic, params, hidden, disabled, Options
     , page, fullPage, resourcePage, Page, RouteParams
     , preferDarkMode, preventDarkMode, darkTheme, lightTheme, darkModeClass
-    , pages, protectedPages, theme
     )
 
 {-|
@@ -12,7 +11,7 @@ module ElmAdmin exposing
 
 # Setup
 
-@docs admin, ElmAdmin
+@docs admin, pages, protectedPages, theme, ElmAdmin
 
 
 # Navigation
@@ -538,10 +537,7 @@ fullPage path props =
                 pathParams
                     |> Dict.get ":userId"
                     |> Maybe.andThen (getUser model)
-            , title = \routeParams model user ->
-                user
-                    |> Maybe.map .name
-                    |> Maybe.withDefault "…"
+            , title = \routeParams model user -> user.name
             , init = \routeParams model user -> ...
             , update = \routeParams model user -> ...
             , subscriptions = \routeParams model user -> ...
@@ -725,43 +721,18 @@ protectedPages { fromModel, toModel } protectedPages_ (Options options) =
         , update = update
         , subscriptions = subscriptions
         }
-        [ theme
-            [ preferDarkMode
-            , darkTheme ...
-            ]
+        [ theme [ preferDarkMode ]
         , pages
-            [  ]
-        , protectedPages
-            { fromModel : \model -> signedIn model
-            , toModel : identity
-            }
-            [ A.single
+            [ A.external "Docs" "https://package.elm-lang.org/"
+            , A.single "Home" Home.page
+            , A.group "Users"
+                Users.index
+                [ A.single "Create" Users.create
+                , A.url Users.show
+                , A.url Users.update
+                ]
             ]
         ]
-
-    admin
-        { title = "My Admin"
-        , init = init
-        , update = update
-        , subscriptions = subscriptions
-        , options = [ preferDarkMode ]
-        , pages =
-            [ A.page "Home" Home.page
-            , A.external "Docs" "https://package.elm-lang.org/"
-            , A.resources "Users"
-                { index = Users.index
-                , show = Users.show
-                , create = Users.create
-                , update = Users.update
-                }
-            , A.group "Workspaces"
-                { main = Workspaces.index
-                , items =
-                    [ A.single "Archive" Workspaces.archive
-                    ]
-                }
-            ]
-        }
 
 -}
 admin :
