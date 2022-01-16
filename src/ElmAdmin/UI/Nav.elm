@@ -1,4 +1,4 @@
-module UI.Nav exposing
+module ElmAdmin.UI.Nav exposing
     ( UINavItem(..)
     , view
     )

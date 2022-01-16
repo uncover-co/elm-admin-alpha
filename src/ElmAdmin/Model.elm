@@ -4,8 +4,6 @@ module ElmAdmin.Model exposing
     , Msg(..)
     , Page
     , init
-    , oneOfPage
-    , postUpdate
     , subscriptions
     , update
     , view
@@ -17,12 +15,12 @@ import Dict exposing (Dict)
 import ElmAdmin.RouteParams exposing (RouteParams)
 import ElmAdmin.Router
 import ElmAdmin.Styles
+import ElmAdmin.UI.Nav exposing (UINavItem)
 import ElmWidgets
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events as HE
 import ThemeSpec
-import UI.Nav exposing (UINavItem)
 import Url exposing (Url)
 
 
@@ -276,7 +274,7 @@ update props msg model =
                         -- and the user already was in a valid route
                         ( Just _, Nothing ) ->
                             Dict.get model.routeParams.path props.pages
-                                |> Maybe.andThen (enabledPage model.routeParams model.model)
+                                |> Maybe.andThen (enabledPage model.routeParams model_)
                                 |> Maybe.map (\page -> page.init model.routeParams model_)
                                 |> Maybe.withDefault ( model_, Cmd.none )
 
@@ -312,7 +310,7 @@ update props msg model =
                                     ( model_, Cmd.none )
 
                 ( model___, pageCmd ) =
-                    case protectedModel of
+                    case props.protectedModel model__ of
                         Just protectedModel_ ->
                             Dict.get model.routeParams.path props.protectedPages
                                 |> Maybe.andThen (enabledPage model.routeParams protectedModel_)
@@ -333,19 +331,6 @@ update props msg model =
             , Cmd.batch [ cmd, pageInitCmd, pageCmd ]
                 |> Cmd.map Msg
             )
-
-
-postUpdate :
-    { previousModel : Model model
-    , pages : Dict String (Page model msg)
-    , protectedPages : Dict String (Page protectedPages msg)
-    , protectedModel : model -> Maybe protectedModel
-    , protectedToModel : model -> protectedModel -> model
-    }
-    -> ( Model model, Cmd (Msg msg) )
-    -> ( Model model, Cmd (Msg msg) )
-postUpdate _ ( model, cmd ) =
-    ( model, cmd )
 
 
 subscriptions :
@@ -469,10 +454,10 @@ view props model =
                         ]
                     , case protectedModel of
                         Just protectedModel_ ->
-                            UI.Nav.view model.routeParams protectedModel_ props.protectedNavItems
+                            ElmAdmin.UI.Nav.view model.routeParams protectedModel_ props.protectedNavItems
 
                         Nothing ->
-                            UI.Nav.view model.routeParams model.model props.navItems
+                            ElmAdmin.UI.Nav.view model.routeParams model.model props.navItems
                     ]
                 , main_ [ class "eadm eadm-main" ]
                     [ activePageTitle

@@ -40,11 +40,11 @@ import Browser.Navigation exposing (..)
 import Dict exposing (Dict)
 import ElmAdmin.Model exposing (Msg(..))
 import ElmAdmin.Router exposing (parsePathParams, pathFromString, pathToString)
+import ElmAdmin.UI.Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Set exposing (Set)
 import ThemeSpec
-import UI.Nav
 import Url exposing (Url)
 
 
@@ -820,11 +820,11 @@ admin title props options_ =
                     )
                 |> Dict.fromList
 
-        viewNavItems : List (UI.Nav.UINavItem model)
+        viewNavItems : List (ElmAdmin.UI.Nav.UINavItem model)
         viewNavItems =
             viewNavItemsFromNavigatiomItems options.pages
 
-        viewProtectedNavItems : List (UI.Nav.UINavItem protectedModel)
+        viewProtectedNavItems : List (ElmAdmin.UI.Nav.UINavItem protectedModel)
         viewProtectedNavItems =
             viewNavItemsFromNavigatiomItems options.protectedPages
     in
@@ -841,25 +841,15 @@ admin title props options_ =
                 , preferDarkMode = theme_.preferDarkMode
                 }
         , update =
-            \msg model ->
-                ElmAdmin.Model.update
-                    { update = props.update
-                    , pages = pages_
-                    , protectedPages = protectedPages_
-                    , pageRoutes = pageRoutes
-                    , protectedPageRoutes = protectedPageRoutes
-                    , protectedModel = options.protectedModel
-                    , protectedToModel = options.protectedToModel
-                    }
-                    msg
-                    model
-                    |> ElmAdmin.Model.postUpdate
-                        { previousModel = model
-                        , pages = pages_
-                        , protectedPages = protectedPages_
-                        , protectedModel = options.protectedModel
-                        , protectedToModel = options.protectedToModel
-                        }
+            ElmAdmin.Model.update
+                { update = props.update
+                , pages = pages_
+                , protectedPages = protectedPages_
+                , pageRoutes = pageRoutes
+                , protectedPageRoutes = protectedPageRoutes
+                , protectedModel = options.protectedModel
+                , protectedToModel = options.protectedToModel
+                }
         , subscriptions =
             ElmAdmin.Model.subscriptions
                 { subscriptions = props.subscriptions
@@ -886,23 +876,23 @@ admin title props options_ =
         }
 
 
-viewNavItemsFromNavigatiomItems : List (NavigationItem m msg) -> List (UI.Nav.UINavItem m)
+viewNavItemsFromNavigatiomItems : List (NavigationItem m msg) -> List (ElmAdmin.UI.Nav.UINavItem m)
 viewNavItemsFromNavigatiomItems ps =
     let
-        go : List (NavigationItem m msg) -> List (UI.Nav.UINavItem m)
+        go : List (NavigationItem m msg) -> List (ElmAdmin.UI.Nav.UINavItem m)
         go navItems_ =
             navItems_
                 |> List.foldl
                     (\navItem acc ->
                         case navItem of
                             External label href_ ->
-                                UI.Nav.External label href_ :: acc
+                                ElmAdmin.UI.Nav.External label href_ :: acc
 
                             Url _ ->
                                 acc
 
                             Single navItem_ ->
-                                UI.Nav.Single
+                                ElmAdmin.UI.Nav.Single
                                     { title = navItem_.title
                                     , path = pathToString navItem_.page.path
                                     , pathParams = parsePathParams navItem_.page.path
@@ -912,7 +902,7 @@ viewNavItemsFromNavigatiomItems ps =
                                     :: acc
 
                             Group { main, items } ->
-                                UI.Nav.Group
+                                ElmAdmin.UI.Nav.Group
                                     { main =
                                         { title = main.title
                                         , path = pathToString main.page.path
@@ -925,7 +915,7 @@ viewNavItemsFromNavigatiomItems ps =
                                     :: acc
 
                             VisualGroup { main, items } ->
-                                UI.Nav.VisualGroup
+                                ElmAdmin.UI.Nav.VisualGroup
                                     { main =
                                         { title = main.title
                                         , hidden = main.hidden
