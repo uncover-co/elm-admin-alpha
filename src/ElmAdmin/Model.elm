@@ -199,20 +199,41 @@ update props msg model =
 
         OnUrlChange url ->
             let
-                activeRouteParams =
+                activeRoute =
                     case protectedModel of
                         Just protectedModel_ ->
                             oneOfPage props.protectedPageRoutes url protectedModel_
-                                |> Maybe.map Tuple.second
+                                |> Maybe.map
+                                    (\( page, routeParams ) ->
+                                        let
+                                            ( m, cmd ) =
+                                                enabledPage routeParams protectedModel_ page
+                                                    |> Maybe.map (\p -> p.init routeParams protectedModel_)
+                                                    |> Maybe.withDefault ( protectedModel_, Cmd.none )
+                                        in
+                                        ( props.protectedToModel model.model m, cmd, routeParams )
+                                    )
 
                         Nothing ->
                             oneOfPage props.pageRoutes url model.model
-                                |> Maybe.map Tuple.second
+                                |> Maybe.map
+                                    (\( page, routeParams ) ->
+                                        let
+                                            ( m, cmd ) =
+                                                enabledPage routeParams model.model page
+                                                    |> Maybe.map (\p -> p.init routeParams model.model)
+                                                    |> Maybe.withDefault ( model.model, Cmd.none )
+                                        in
+                                        ( m, cmd, routeParams )
+                                    )
             in
-            case activeRouteParams of
-                Just routeParams ->
-                    ( { model | routeParams = routeParams }
-                    , Cmd.none
+            case activeRoute of
+                Just ( model_, cmd, routeParams ) ->
+                    ( { model
+                        | model = model_
+                        , routeParams = routeParams
+                      }
+                    , Cmd.map Msg cmd
                     )
 
                 Nothing ->
