@@ -38,12 +38,15 @@ module ElmAdmin exposing
 import Browser
 import Browser.Navigation exposing (..)
 import Dict exposing (Dict)
+import ElmAdmin.Form
 import ElmAdmin.Model exposing (Msg(..))
+import ElmAdmin.Page
 import ElmAdmin.Router exposing (parsePathParams, pathFromString, pathToString)
 import ElmAdmin.UI.Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Set exposing (Set)
+import SubCmd
 import ThemeSpec
 import Url exposing (Url)
 
@@ -59,7 +62,7 @@ type alias ElmAdmin flags model msg =
 
 {-| -}
 type Page model msg
-    = Page (ElmAdmin.Model.Page model msg)
+    = Page (ElmAdmin.Page.Page model msg)
 
 
 {-| -}
@@ -77,7 +80,7 @@ type alias RouteParams =
 {-| -}
 type NavigationItem model msg
     = External String String
-    | Url (ElmAdmin.Model.Page model msg)
+    | Url (ElmAdmin.Page.Page model msg)
     | Single (NavItemData model msg)
     | Group
         { main : NavItemData model msg
@@ -90,7 +93,7 @@ type NavigationItem model msg
 
 
 type alias NavItemData model msg =
-    { page : ElmAdmin.Model.Page model msg
+    { page : ElmAdmin.Page.Page model msg
     , pathParams : List String
     , hardParams : Dict String String
     , title : RouteParams -> model -> String
@@ -299,7 +302,7 @@ disabled fn a =
 
         Single i ->
             let
-                page_ : ElmAdmin.Model.Page model msg
+                page_ : ElmAdmin.Page.Page model msg
                 page_ =
                     i.page
             in
@@ -307,7 +310,7 @@ disabled fn a =
 
         Group { main, items } ->
             let
-                page_ : ElmAdmin.Model.Page model msg
+                page_ : ElmAdmin.Page.Page model msg
                 page_ =
                     main.page
             in
@@ -350,7 +353,7 @@ disableSubItem fn item =
 
         Single i ->
             let
-                page_ : ElmAdmin.Model.Page model msg
+                page_ : ElmAdmin.Page.Page model msg
                 page_ =
                     i.page
             in
@@ -365,7 +368,7 @@ disableSubItem fn item =
 
         Group { main, items } ->
             let
-                page_ : ElmAdmin.Model.Page model msg
+                page_ : ElmAdmin.Page.Page model msg
                 page_ =
                     main.page
             in
@@ -477,10 +480,10 @@ page path title view =
     Page
         { path = pathFromString path
         , title = \_ _ -> title
-        , init = \_ model -> ( model, Cmd.none )
-        , update = \_ _ model -> ( model, Cmd.none )
+        , init = \_ model -> ( model, SubCmd.none )
+        , update = \_ _ _ model -> ( model, SubCmd.none )
         , subscriptions = \_ _ -> Sub.none
-        , view = view
+        , view = \_ -> view
         , disabled = \_ _ -> False
         }
 
@@ -520,10 +523,16 @@ fullPage path props =
     Page
         { path = pathFromString path
         , title = props.title
-        , init = props.init
-        , update = props.update
+        , init =
+            \r m ->
+                props.init r m
+                    |> Tuple.mapSecond SubCmd.cmd
+        , update =
+            \_ r msg model ->
+                props.update r msg model
+                    |> Tuple.mapSecond SubCmd.cmd
         , subscriptions = props.subscriptions
-        , view = props.view
+        , view = \_ -> props.view
         , disabled = \_ _ -> False
         }
 
@@ -571,22 +580,91 @@ resourcePage path props =
             \params_ model ->
                 props.resource params_ model
                     |> Maybe.map (props.init params_ model)
-                    |> Maybe.withDefault ( model, Cmd.none )
+                    |> Maybe.map (Tuple.mapSecond SubCmd.cmd)
+                    |> Maybe.withDefault ( model, SubCmd.none )
         , update =
-            \params_ msg model ->
+            \_ params_ msg model ->
                 props.resource params_ model
                     |> Maybe.map (props.update params_ msg model)
-                    |> Maybe.withDefault ( model, Cmd.none )
+                    |> Maybe.map (Tuple.mapSecond SubCmd.cmd)
+                    |> Maybe.withDefault ( model, SubCmd.none )
         , subscriptions =
             \params_ model ->
                 props.resource params_ model
                     |> Maybe.map (props.subscriptions params_ model)
                     |> Maybe.withDefault Sub.none
         , view =
-            \params_ model ->
+            \_ params_ model ->
                 props.resource params_ model
                     |> Maybe.map (props.view params_ model)
                     |> Maybe.withDefault (div [] [])
+        }
+
+
+{-|
+
+    formPage "/users/:userId"
+        "Create User"
+        { resource =
+            \{ pathParams } model ->
+                Dict.get ":userId" pathParams
+                    |> Maybe.andThen (getUser model)
+        , form =
+            form User
+                |> textField "First Name" .name []
+                |> textField "Last Name" .lastname []
+        , onSubmit =
+            \_ _ user ->
+                createUser user
+        }
+
+-}
+formPage :
+    String
+    -> String
+    ->
+        { resource : RouteParams -> model -> Maybe resource
+        , form : ElmAdmin.Form.Form resource
+        , onSubmit : RouteParams -> model -> resource -> ( model, Cmd msg )
+        }
+    -> Page model msg
+formPage path title props =
+    Page
+        { path =
+            pathFromString path
+        , disabled =
+            \_ _ -> False
+        , title =
+            \_ _ -> title
+        , init =
+            \_ model -> ( model, SubCmd.none )
+        , update =
+            \_ _ _ model -> ( model, SubCmd.none )
+        , subscriptions =
+            \_ _ -> Sub.none
+        , view =
+            \_ _ _ -> div [] []
+
+        -- , init =
+        --     \_ _ ->
+        --         props.resource params_ model
+        --             |> Maybe.map (props.init params_ model)
+        --             |> Maybe.withDefault ( model, Cmd.none )
+        -- , update =
+        --     \_ params_ msg model ->
+        --         props.resource params_ model
+        --             |> Maybe.map (props.update params_ msg model)
+        --             |> Maybe.withDefault ( model, Cmd.none )
+        -- , subscriptions =
+        --     \params_ model ->
+        --         props.resource params_ model
+        --             |> Maybe.map (props.subscriptions params_ model)
+        --             |> Maybe.withDefault Sub.none
+        -- , view =
+        --     \_ params_ model ->
+        --         props.resource params_ model
+        --             |> Maybe.map (props.view params_ model)
+        --             |> Maybe.withDefault (div [] [])
         }
 
 
@@ -759,7 +837,7 @@ admin title props options_ =
 
         pagesDataList_ :
             List (NavigationItem m msg)
-            -> List (ElmAdmin.Model.Page m msg)
+            -> List (ElmAdmin.Page.Page m msg)
         pagesDataList_ xs =
             xs
                 |> List.foldl
@@ -782,23 +860,23 @@ admin title props options_ =
                     )
                     []
 
-        pagesDataList : List (ElmAdmin.Model.Page model msg)
+        pagesDataList : List (ElmAdmin.Page.Page model msg)
         pagesDataList =
             pagesDataList_ options.pages
 
-        protectedPagesDataList : List (ElmAdmin.Model.Page protectedModel msg)
+        protectedPagesDataList : List (ElmAdmin.Page.Page protectedModel msg)
         protectedPagesDataList =
             pagesDataList_ options.protectedPages
 
-        pageRoutes : Dict String (List (ElmAdmin.Model.Page model msg))
+        pageRoutes : Dict String (List (ElmAdmin.Page.Page model msg))
         pageRoutes =
             ElmAdmin.Router.toCache .path pagesDataList
 
-        protectedPageRoutes : Dict String (List (ElmAdmin.Model.Page protectedModel msg))
+        protectedPageRoutes : Dict String (List (ElmAdmin.Page.Page protectedModel msg))
         protectedPageRoutes =
             ElmAdmin.Router.toCache .path protectedPagesDataList
 
-        pages_ : Dict String (ElmAdmin.Model.Page model msg)
+        pages_ : Dict String (ElmAdmin.Page.Page model msg)
         pages_ =
             pagesDataList
                 |> List.map
@@ -809,7 +887,7 @@ admin title props options_ =
                     )
                 |> Dict.fromList
 
-        protectedPages_ : Dict String (ElmAdmin.Model.Page protectedModel msg)
+        protectedPages_ : Dict String (ElmAdmin.Page.Page protectedModel msg)
         protectedPages_ =
             protectedPagesDataList
                 |> List.map

@@ -2,7 +2,6 @@ module ElmAdmin.Model exposing
     ( ElmAdmin
     , Model
     , Msg(..)
-    , Page
     , init
     , subscriptions
     , update
@@ -12,14 +11,16 @@ module ElmAdmin.Model exposing
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation
 import Dict exposing (Dict)
-import ElmAdmin.RouteParams exposing (RouteParams)
-import ElmAdmin.Router
+import ElmAdmin.Form exposing (FormModel)
+import ElmAdmin.Page exposing (Effect(..), Page)
+import ElmAdmin.Router exposing (RouteParams)
 import ElmAdmin.Styles
 import ElmAdmin.UI.Nav exposing (UINavItem)
 import ElmWidgets
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events as HE
+import SubModule
 import ThemeSpec
 import Url exposing (Url)
 
@@ -28,22 +29,12 @@ type alias ElmAdmin flags model msg =
     Program flags (Model model) (Msg msg)
 
 
-type alias Page model msg =
-    { path : List String
-    , title : RouteParams -> model -> String
-    , init : RouteParams -> model -> ( model, Cmd msg )
-    , update : RouteParams -> msg -> model -> ( model, Cmd msg )
-    , subscriptions : RouteParams -> model -> Sub msg
-    , view : RouteParams -> model -> Html msg
-    , disabled : RouteParams -> model -> Bool
-    }
-
-
 type alias Model model =
     { navKey : Browser.Navigation.Key
     , model : model
     , routeParams : RouteParams
     , darkMode : Bool
+    , formModel : FormModel
     }
 
 
@@ -52,6 +43,7 @@ type Msg msg
     | OnUrlChange Url
     | ToggleDarkMode
     | Msg msg
+    | GotEffect Effect
 
 
 oneOfPage :
@@ -97,7 +89,7 @@ init props flags url navKey =
         ( initialModel_, initialCmd ) =
             props.init flags navKey
 
-        ( initialModel, initialPageCmd, activeRouteParams ) =
+        ( initialModel, initPageCmd, activeRouteParams ) =
             case props.protectedModel initialModel_ of
                 Just protectedModel ->
                     let
@@ -111,11 +103,18 @@ init props flags url navKey =
                                 |> Maybe.map Tuple.second
                     in
                     activePage
-                        |> Maybe.map (\( p, r ) -> p.init r protectedModel)
-                        |> Maybe.withDefault ( protectedModel, Cmd.none )
-                        |> (\( protectedModel_, cmd_ ) ->
+                        |> Maybe.map
+                            (\( p, r ) ->
+                                p.init r protectedModel
+                                    |> SubModule.initWithEffect
+                                        { toMsg = Msg
+                                        , effectToMsg = GotEffect
+                                        }
+                            )
+                        |> Maybe.withDefault ( protectedModel, identity )
+                        |> (\( protectedModel_, initPageCmd_ ) ->
                                 ( props.protectedToModel initialModel_ protectedModel_
-                                , cmd_
+                                , initPageCmd_
                                 , activeRouteParams_
                                 )
                            )
@@ -132,8 +131,15 @@ init props flags url navKey =
                                 |> Maybe.map Tuple.second
                     in
                     activePage
-                        |> Maybe.map (\( p, r ) -> p.init r initialModel_)
-                        |> Maybe.withDefault ( initialModel_, Cmd.none )
+                        |> Maybe.map
+                            (\( p, r ) ->
+                                p.init r initialModel_
+                                    |> SubModule.initWithEffect
+                                        { toMsg = Msg
+                                        , effectToMsg = GotEffect
+                                        }
+                            )
+                        |> Maybe.withDefault ( initialModel_, identity )
                         |> (\( initialModel__, cmd_ ) ->
                                 ( initialModel__
                                 , cmd_
@@ -143,7 +149,7 @@ init props flags url navKey =
 
         routeParams =
             activeRouteParams
-                |> Maybe.withDefault ElmAdmin.RouteParams.empty
+                |> Maybe.withDefault ElmAdmin.Router.emptyRouteParams
 
         adminCmd =
             if activeRouteParams == Nothing && url.path /= "/" then
@@ -154,15 +160,16 @@ init props flags url navKey =
     in
     ( { navKey = navKey
       , model = initialModel
+      , formModel = ElmAdmin.Form.empty
       , routeParams = routeParams
       , darkMode = props.preferDarkMode
       }
     , Cmd.batch
         [ Cmd.map Msg initialCmd
-        , Cmd.map Msg initialPageCmd
         , adminCmd
         ]
     )
+        |> initPageCmd
 
 
 update :
@@ -206,8 +213,15 @@ update props msg model =
                                         let
                                             ( m, cmd ) =
                                                 enabledPage routeParams protectedModel_ page
-                                                    |> Maybe.map (\p -> p.init routeParams protectedModel_)
-                                                    |> Maybe.withDefault ( protectedModel_, Cmd.none )
+                                                    |> Maybe.map
+                                                        (\p ->
+                                                            p.init routeParams protectedModel_
+                                                                |> SubModule.initWithEffect
+                                                                    { toMsg = Msg
+                                                                    , effectToMsg = GotEffect
+                                                                    }
+                                                        )
+                                                    |> Maybe.withDefault ( protectedModel_, identity )
                                         in
                                         ( props.protectedToModel model.model m, cmd, routeParams )
                                     )
@@ -217,31 +231,43 @@ update props msg model =
                                 |> Maybe.map
                                     (\( page, routeParams ) ->
                                         let
-                                            ( m, cmd ) =
+                                            ( m, initPage ) =
                                                 enabledPage routeParams model.model page
-                                                    |> Maybe.map (\p -> p.init routeParams model.model)
-                                                    |> Maybe.withDefault ( model.model, Cmd.none )
+                                                    |> Maybe.map
+                                                        (\p ->
+                                                            p.init routeParams model.model
+                                                                |> SubModule.initWithEffect
+                                                                    { toMsg = Msg
+                                                                    , effectToMsg = GotEffect
+                                                                    }
+                                                        )
+                                                    |> Maybe.withDefault ( model.model, identity )
                                         in
-                                        ( m, cmd, routeParams )
+                                        ( m, initPage, routeParams )
                                     )
             in
             case activeRoute of
-                Just ( model_, cmd, routeParams ) ->
+                Just ( model_, initPage, routeParams ) ->
                     ( { model
                         | model = model_
                         , routeParams = routeParams
+                        , formModel = ElmAdmin.Form.empty
                       }
-                    , Cmd.map Msg cmd
+                    , Cmd.none
                     )
+                        |> initPage
 
                 Nothing ->
                     if url.path == "/" then
-                        ( { model | routeParams = ElmAdmin.RouteParams.empty }
+                        ( { model
+                            | routeParams = ElmAdmin.Router.emptyRouteParams
+                            , formModel = ElmAdmin.Form.empty
+                          }
                         , Cmd.none
                         )
 
                     else
-                        ( model
+                        ( { model | formModel = ElmAdmin.Form.empty }
                         , Browser.Navigation.pushUrl model.navKey "/"
                         )
 
@@ -253,10 +279,11 @@ update props msg model =
                 -- First we update the user model using the global update
                 ( model_, cmd ) =
                     props.update model.routeParams msg_ model.model
+                        |> Tuple.mapSecond (Cmd.map Msg)
 
                 -- Then we check if we should initialize the current active page
                 -- There are a few different reasons this should be triggered:
-                ( model__, pageInitCmd ) =
+                ( model__, pageInitCmd, formModel ) =
                     case ( protectedModel, props.protectedModel model_ ) of
                         -- if the app changes from unprotected to protected
                         -- and the user already was in a valid route
@@ -266,17 +293,32 @@ update props msg model =
                                 |> Maybe.map
                                     (\page ->
                                         page.init model.routeParams protectedModel_
-                                            |> Tuple.mapFirst (props.protectedToModel model_)
+                                            |> SubModule.initWithEffect
+                                                { toMsg = Msg
+                                                , effectToMsg = GotEffect
+                                                }
                                     )
-                                |> Maybe.withDefault ( model_, Cmd.none )
+                                |> Maybe.map
+                                    (\( m, c ) ->
+                                        ( props.protectedToModel model_ m, c, ElmAdmin.Form.empty )
+                                    )
+                                |> Maybe.withDefault ( model_, identity, model.formModel )
 
                         -- if the app changes from protected to unprotected
                         -- and the user already was in a valid route
                         ( Just _, Nothing ) ->
                             Dict.get model.routeParams.path props.pages
                                 |> Maybe.andThen (enabledPage model.routeParams model_)
-                                |> Maybe.map (\page -> page.init model.routeParams model_)
-                                |> Maybe.withDefault ( model_, Cmd.none )
+                                |> Maybe.map
+                                    (\page ->
+                                        page.init model.routeParams model_
+                                            |> SubModule.initWithEffect
+                                                { toMsg = Msg
+                                                , effectToMsg = GotEffect
+                                                }
+                                    )
+                                |> Maybe.map (\( m, c ) -> ( m, c, ElmAdmin.Form.empty ))
+                                |> Maybe.withDefault ( model_, identity, model.formModel )
 
                         -- if the user is in a protected state
                         -- and two pages with the same route exists (one enabled and one disabled)
@@ -286,13 +328,19 @@ update props msg model =
                                 Just page ->
                                     if page.disabled model.routeParams previousProtectedModel_ && not (page.disabled model.routeParams protectedModel_) then
                                         page.init model.routeParams protectedModel_
-                                            |> Tuple.mapFirst (props.protectedToModel model_)
+                                            |> SubModule.initWithEffect
+                                                { toMsg = Msg
+                                                , effectToMsg = GotEffect
+                                                }
+                                            |> (\( m, c ) ->
+                                                    ( props.protectedToModel model_ m, c, ElmAdmin.Form.empty )
+                                               )
 
                                     else
-                                        ( model_, Cmd.none )
+                                        ( model_, identity, model.formModel )
 
                                 Nothing ->
-                                    ( model_, Cmd.none )
+                                    ( model_, identity, model.formModel )
 
                         -- if the user is in an unprotected state
                         -- and two pages with the same route exists (one enabled and one disabled)
@@ -302,12 +350,17 @@ update props msg model =
                                 Just page ->
                                     if page.disabled model.routeParams model.model && not (page.disabled model.routeParams model_) then
                                         page.init model.routeParams model_
+                                            |> SubModule.initWithEffect
+                                                { toMsg = Msg
+                                                , effectToMsg = GotEffect
+                                                }
+                                            |> (\( m, c ) -> ( m, c, ElmAdmin.Form.empty ))
 
                                     else
-                                        ( model_, Cmd.none )
+                                        ( model_, identity, model.formModel )
 
                                 Nothing ->
-                                    ( model_, Cmd.none )
+                                    ( model_, identity, model.formModel )
 
                 ( model___, pageCmd ) =
                     case props.protectedModel model__ of
@@ -316,21 +369,36 @@ update props msg model =
                                 |> Maybe.andThen (enabledPage model.routeParams protectedModel_)
                                 |> Maybe.map
                                     (\page ->
-                                        page.update model.routeParams msg_ protectedModel_
-                                            |> Tuple.mapFirst (props.protectedToModel model__)
+                                        page.update formModel model.routeParams msg_ protectedModel_
+                                            |> SubModule.updateWithEffect
+                                                { toModel = props.protectedToModel model__
+                                                , toMsg = Msg
+                                                , effectToMsg = GotEffect
+                                                }
                                     )
                                 |> Maybe.withDefault ( model__, Cmd.none )
 
                         Nothing ->
                             Dict.get model.routeParams.path props.pages
                                 |> Maybe.andThen (enabledPage model.routeParams model.model)
-                                |> Maybe.map (\page -> page.update model.routeParams msg_ model__)
+                                |> Maybe.map
+                                    (\page ->
+                                        page.update formModel model.routeParams msg_ model__
+                                            |> SubModule.updateWithEffect
+                                                { toModel = identity
+                                                , toMsg = Msg
+                                                , effectToMsg = GotEffect
+                                                }
+                                    )
                                 |> Maybe.withDefault ( model__, Cmd.none )
             in
             ( { model | model = model___ }
-            , Cmd.batch [ cmd, pageInitCmd, pageCmd ]
-                |> Cmd.map Msg
+            , Cmd.batch [ cmd, pageCmd ]
             )
+                |> pageInitCmd
+
+        GotEffect _ ->
+            ( model, Cmd.none )
 
 
 subscriptions :
@@ -397,7 +465,7 @@ view props model =
                                     [ class "eadm eadm-page-title" ]
                                     [ text (p.title model.routeParams protectedModel_)
                                     ]
-                                , p.view model.routeParams protectedModel_
+                                , p.view model.formModel model.routeParams protectedModel_
                                     |> Html.map Msg
                                 )
                             )
@@ -412,7 +480,7 @@ view props model =
                                     [ class "eadm eadm-page-title" ]
                                     [ text (p.title model.routeParams model.model)
                                     ]
-                                , p.view model.routeParams model.model
+                                , p.view model.formModel model.routeParams model.model
                                     |> Html.map Msg
                                 )
                             )

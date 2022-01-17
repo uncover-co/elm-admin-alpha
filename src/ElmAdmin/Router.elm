@@ -1,5 +1,7 @@
 module ElmAdmin.Router exposing
-    ( applyParams
+    ( RouteParams
+    , applyParams
+    , emptyRouteParams
     , oneOf
     , parsePathParams
     , pathFromString
@@ -8,8 +10,22 @@ module ElmAdmin.Router exposing
     )
 
 import Dict exposing (Dict)
-import ElmAdmin.RouteParams exposing (RouteParams)
 import Url exposing (Url)
+
+
+type alias RouteParams =
+    { path : String
+    , pathParams : Dict String String
+    , queryParams : Dict String (List String)
+    }
+
+
+emptyRouteParams : RouteParams
+emptyRouteParams =
+    { path = "/"
+    , pathParams = Dict.empty
+    , queryParams = Dict.empty
+    }
 
 
 pathFromString : String -> List String
