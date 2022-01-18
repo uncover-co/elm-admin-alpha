@@ -3,8 +3,7 @@ module ElmAdmin.UI.Nav exposing
     , view
     )
 
-import ElmAdmin.RouteParams exposing (RouteParams)
-import ElmAdmin.Router exposing (applyParams)
+import ElmAdmin.Router exposing (RouteParams, applyParams)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 

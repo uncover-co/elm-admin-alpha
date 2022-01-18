@@ -1,11 +1,13 @@
 module ElmAdmin.Form exposing
-    ( Form
+    ( Field(..)
+    , FieldValue(..)
+    , Fields
     , FormModel
     , TextFieldOptions
     , checkboxField
     , empty
-    , form
-    , init
+    , fields
+    , initFields
     , rangeField
     , textField
     )
@@ -14,7 +16,9 @@ import Dict exposing (Dict)
 
 
 type alias FormModel =
-    Dict String FieldValue
+    { initialized : Bool
+    , values : Dict String FieldValue
+    }
 
 
 type FieldValue
@@ -23,44 +27,51 @@ type FieldValue
     | FieldValueBool Bool
 
 
-type alias Form r =
-    FormBuilder r r
+type alias Fields r =
+    FieldsBuilder r r
 
 
-type alias FormBuilder resource a =
-    { fields : List (Field resource)
+type alias FieldsBuilder resource a =
+    { fields : List ( String, Field resource )
     , resolver : FormModel -> Maybe a
     }
 
 
-form : a -> FormBuilder resource a
-form a =
+fields : a -> FieldsBuilder resource a
+fields a =
     { fields = []
     , resolver = \_ -> Just a
     }
 
 
-init : resource -> Form resource -> FormModel
-init resource form_ =
-    form_.fields
-        |> List.map
-            (\field ->
-                case field of
-                    TextField { label, fromResource } ->
-                        ( label, FieldValueString <| fromResource resource )
+initFields : resource -> Fields resource -> FormModel
+initFields resource form_ =
+    { initialized = True
+    , values =
+        form_.fields
+            |> List.map
+                (Tuple.mapSecond
+                    (\field ->
+                        case field of
+                            TextField { fromResource } ->
+                                FieldValueString <| fromResource resource
 
-                    CheckboxField { label, fromResource } ->
-                        ( label, FieldValueBool <| fromResource resource )
+                            CheckboxField { fromResource } ->
+                                FieldValueBool <| fromResource resource
 
-                    RangeField { label, fromResource } ->
-                        ( label, FieldValueFloat <| fromResource resource )
-            )
-        |> Dict.fromList
+                            RangeField { fromResource } ->
+                                FieldValueFloat <| fromResource resource
+                    )
+                )
+            |> Dict.fromList
+    }
 
 
 empty : FormModel
 empty =
-    Dict.empty
+    { initialized = False
+    , values = Dict.empty
+    }
 
 
 
@@ -80,18 +91,15 @@ textFieldDefaults =
 
 type Field resource
     = TextField
-        { label : String
-        , fromResource : resource -> String
+        { fromResource : resource -> String
         , options : TextFieldOptions
         }
     | RangeField
-        { label : String
-        , fromResource : resource -> Float
+        { fromResource : resource -> Float
         , options : RangeFieldOptions
         }
     | CheckboxField
-        { label : String
-        , fromResource : resource -> Bool
+        { fromResource : resource -> Bool
         , options : CheckboxOptions
         }
 
@@ -100,26 +108,27 @@ textField :
     String
     -> (resource -> String)
     -> List (TextFieldOptions -> TextFieldOptions)
-    -> FormBuilder resource (String -> a)
-    -> FormBuilder resource a
+    -> FieldsBuilder resource (String -> a)
+    -> FieldsBuilder resource a
 textField label fromResource options_ f =
     let
         options =
             List.foldl (\fn a -> fn a) textFieldDefaults options_
     in
     { fields =
-        TextField
-            { label = label
-            , fromResource = fromResource
+        ( label
+        , TextField
+            { fromResource = fromResource
             , options = options
             }
+        )
             :: f.fields
     , resolver =
-        \fields ->
-            f.resolver fields
+        \formModel ->
+            f.resolver formModel
                 |> Maybe.andThen
                     (\resolver ->
-                        case Dict.get label fields of
+                        case Dict.get label formModel.values of
                             Just (FieldValueString v) ->
                                 Just (resolver v)
 
@@ -148,26 +157,27 @@ checkboxField :
     String
     -> (resource -> Bool)
     -> List (CheckboxOptions -> CheckboxOptions)
-    -> FormBuilder resource (Bool -> a)
-    -> FormBuilder resource a
+    -> FieldsBuilder resource (Bool -> a)
+    -> FieldsBuilder resource a
 checkboxField label fromResource options_ f =
     let
         options =
             List.foldl (\fn a -> fn a) checkboxFieldDefaults options_
     in
     { fields =
-        CheckboxField
-            { label = label
-            , fromResource = fromResource
+        ( label
+        , CheckboxField
+            { fromResource = fromResource
             , options = options
             }
+        )
             :: f.fields
     , resolver =
-        \fields ->
-            f.resolver fields
+        \formModel ->
+            f.resolver formModel
                 |> Maybe.andThen
                     (\resolver ->
-                        case Dict.get label fields of
+                        case Dict.get label formModel.values of
                             Just (FieldValueBool v) ->
                                 Just (resolver v)
 
@@ -202,26 +212,27 @@ rangeField :
     String
     -> (resource -> Float)
     -> List (RangeFieldOptions -> RangeFieldOptions)
-    -> FormBuilder resource (Float -> a)
-    -> FormBuilder resource a
+    -> FieldsBuilder resource (Float -> a)
+    -> FieldsBuilder resource a
 rangeField label fromResource options_ f =
     let
         options =
             List.foldl (\fn a -> fn a) rangeFieldDefaults options_
     in
     { fields =
-        RangeField
-            { label = label
-            , fromResource = fromResource
+        ( label
+        , RangeField
+            { fromResource = fromResource
             , options = options
             }
+        )
             :: f.fields
     , resolver =
-        \fields ->
-            f.resolver fields
+        \formModel ->
+            f.resolver formModel
                 |> Maybe.andThen
                     (\resolver ->
-                        case Dict.get label fields of
+                        case Dict.get label formModel.values of
                             Just (FieldValueFloat v) ->
                                 Just (resolver v)
 

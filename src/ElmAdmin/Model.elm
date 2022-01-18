@@ -1,7 +1,9 @@
 module ElmAdmin.Model exposing
-    ( ElmAdmin
+    ( Effect(..)
+    , ElmAdmin
     , Model
     , Msg(..)
+    , Page
     , init
     , subscriptions
     , update
@@ -11,8 +13,7 @@ module ElmAdmin.Model exposing
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation
 import Dict exposing (Dict)
-import ElmAdmin.Form exposing (FormModel)
-import ElmAdmin.Page exposing (Effect(..), Page)
+import ElmAdmin.Form exposing (FieldValue, FormModel)
 import ElmAdmin.Router exposing (RouteParams)
 import ElmAdmin.Styles
 import ElmAdmin.UI.Nav exposing (UINavItem)
@@ -20,6 +21,7 @@ import ElmWidgets
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events as HE
+import SubCmd exposing (SubCmd)
 import SubModule
 import ThemeSpec
 import Url exposing (Url)
@@ -42,8 +44,25 @@ type Msg msg
     = OnUrlRequest UrlRequest
     | OnUrlChange Url
     | ToggleDarkMode
-    | Msg msg
+    | GotMsg msg
     | GotEffect Effect
+    | SubmitForm
+    | UpdateFormField String FieldValue
+
+
+type Effect
+    = SetFormModel FormModel
+
+
+type alias Page model msg =
+    { path : List String
+    , title : RouteParams -> model -> String
+    , init : RouteParams -> model -> ( model, SubCmd msg Effect )
+    , update : FormModel -> RouteParams -> Msg msg -> model -> ( model, SubCmd msg Effect )
+    , subscriptions : RouteParams -> model -> Sub msg
+    , view : FormModel -> RouteParams -> model -> Html (Msg msg)
+    , disabled : RouteParams -> model -> Bool
+    }
 
 
 oneOfPage :
@@ -107,7 +126,7 @@ init props flags url navKey =
                             (\( p, r ) ->
                                 p.init r protectedModel
                                     |> SubModule.initWithEffect
-                                        { toMsg = Msg
+                                        { toMsg = GotMsg
                                         , effectToMsg = GotEffect
                                         }
                             )
@@ -135,7 +154,7 @@ init props flags url navKey =
                             (\( p, r ) ->
                                 p.init r initialModel_
                                     |> SubModule.initWithEffect
-                                        { toMsg = Msg
+                                        { toMsg = GotMsg
                                         , effectToMsg = GotEffect
                                         }
                             )
@@ -165,7 +184,7 @@ init props flags url navKey =
       , darkMode = props.preferDarkMode
       }
     , Cmd.batch
-        [ Cmd.map Msg initialCmd
+        [ Cmd.map GotMsg initialCmd
         , adminCmd
         ]
     )
@@ -217,7 +236,7 @@ update props msg model =
                                                         (\p ->
                                                             p.init routeParams protectedModel_
                                                                 |> SubModule.initWithEffect
-                                                                    { toMsg = Msg
+                                                                    { toMsg = GotMsg
                                                                     , effectToMsg = GotEffect
                                                                     }
                                                         )
@@ -237,7 +256,7 @@ update props msg model =
                                                         (\p ->
                                                             p.init routeParams model.model
                                                                 |> SubModule.initWithEffect
-                                                                    { toMsg = Msg
+                                                                    { toMsg = GotMsg
                                                                     , effectToMsg = GotEffect
                                                                     }
                                                         )
@@ -274,12 +293,12 @@ update props msg model =
         ToggleDarkMode ->
             ( { model | darkMode = not model.darkMode }, Cmd.none )
 
-        Msg msg_ ->
+        GotMsg msg_ ->
             let
                 -- First we update the user model using the global update
                 ( model_, cmd ) =
                     props.update model.routeParams msg_ model.model
-                        |> Tuple.mapSecond (Cmd.map Msg)
+                        |> Tuple.mapSecond (Cmd.map GotMsg)
 
                 -- Then we check if we should initialize the current active page
                 -- There are a few different reasons this should be triggered:
@@ -294,7 +313,7 @@ update props msg model =
                                     (\page ->
                                         page.init model.routeParams protectedModel_
                                             |> SubModule.initWithEffect
-                                                { toMsg = Msg
+                                                { toMsg = GotMsg
                                                 , effectToMsg = GotEffect
                                                 }
                                     )
@@ -313,7 +332,7 @@ update props msg model =
                                     (\page ->
                                         page.init model.routeParams model_
                                             |> SubModule.initWithEffect
-                                                { toMsg = Msg
+                                                { toMsg = GotMsg
                                                 , effectToMsg = GotEffect
                                                 }
                                     )
@@ -329,7 +348,7 @@ update props msg model =
                                     if page.disabled model.routeParams previousProtectedModel_ && not (page.disabled model.routeParams protectedModel_) then
                                         page.init model.routeParams protectedModel_
                                             |> SubModule.initWithEffect
-                                                { toMsg = Msg
+                                                { toMsg = GotMsg
                                                 , effectToMsg = GotEffect
                                                 }
                                             |> (\( m, c ) ->
@@ -351,7 +370,7 @@ update props msg model =
                                     if page.disabled model.routeParams model.model && not (page.disabled model.routeParams model_) then
                                         page.init model.routeParams model_
                                             |> SubModule.initWithEffect
-                                                { toMsg = Msg
+                                                { toMsg = GotMsg
                                                 , effectToMsg = GotEffect
                                                 }
                                             |> (\( m, c ) -> ( m, c, ElmAdmin.Form.empty ))
@@ -369,10 +388,10 @@ update props msg model =
                                 |> Maybe.andThen (enabledPage model.routeParams protectedModel_)
                                 |> Maybe.map
                                     (\page ->
-                                        page.update formModel model.routeParams msg_ protectedModel_
+                                        page.update formModel model.routeParams msg protectedModel_
                                             |> SubModule.updateWithEffect
                                                 { toModel = props.protectedToModel model__
-                                                , toMsg = Msg
+                                                , toMsg = GotMsg
                                                 , effectToMsg = GotEffect
                                                 }
                                     )
@@ -383,10 +402,10 @@ update props msg model =
                                 |> Maybe.andThen (enabledPage model.routeParams model.model)
                                 |> Maybe.map
                                     (\page ->
-                                        page.update formModel model.routeParams msg_ model__
+                                        page.update formModel model.routeParams msg model__
                                             |> SubModule.updateWithEffect
                                                 { toModel = identity
-                                                , toMsg = Msg
+                                                , toMsg = GotMsg
                                                 , effectToMsg = GotEffect
                                                 }
                                     )
@@ -397,8 +416,27 @@ update props msg model =
             )
                 |> pageInitCmd
 
-        GotEffect _ ->
+        GotEffect effect ->
+            case effect of
+                SetFormModel formModel ->
+                    ( { model | formModel = formModel }, Cmd.none )
+
+        SubmitForm ->
             ( model, Cmd.none )
+
+        UpdateFormField k v ->
+            let
+                formModel =
+                    model.formModel
+            in
+            ( { model
+                | formModel =
+                    { formModel
+                        | values = Dict.insert k v formModel.values
+                    }
+              }
+            , Cmd.none
+            )
 
 
 subscriptions :
@@ -430,7 +468,7 @@ subscriptions props model =
         [ props.subscriptions model.routeParams model.model
         , activePageSubscriptions
         ]
-        |> Sub.map Msg
+        |> Sub.map GotMsg
 
 
 view :
@@ -466,7 +504,6 @@ view props model =
                                     [ text (p.title model.routeParams protectedModel_)
                                     ]
                                 , p.view model.formModel model.routeParams protectedModel_
-                                    |> Html.map Msg
                                 )
                             )
                         |> Maybe.withDefault ( text "", text "" )
@@ -481,7 +518,6 @@ view props model =
                                     [ text (p.title model.routeParams model.model)
                                     ]
                                 , p.view model.formModel model.routeParams model.model
-                                    |> Html.map Msg
                                 )
                             )
                         |> Maybe.withDefault ( text "", text "" )
