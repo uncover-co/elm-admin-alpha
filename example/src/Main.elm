@@ -3,6 +3,7 @@ module Main exposing (main)
 import Dict
 import ElmAdmin as A exposing (ElmAdmin, admin)
 import ElmAdmin.Form as AF
+import ElmAdmin.Page as AP
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import SubCmd exposing (SubCmd)
@@ -30,22 +31,20 @@ emptyUser =
     }
 
 
-{-|
-
-    page :
-
--}
-createUser : A.Page Model Msg
+createUser : AP.Page Model Msg ()
 createUser =
-    A.formPage "/users/create"
-        "Create User"
-        { init = \_ _ -> Just emptyUser
-        , fields =
-            AF.fields User
-                |> AF.textField "Name" .name []
-                |> AF.checkboxField "Admin" .isAdmin []
-        , onSubmit = \_ model user -> ( { model | user = Just user }, SubCmd.none )
-        }
+    AP.page "Create User"
+        |> AP.view (\_ _ -> div [] [ text "Here bitchess" ])
+        |> AP.view (\_ _ -> div [] [ text "Ha! Two views mofo" ])
+        |> AP.form
+            { init = \_ _ -> Just emptyUser
+            , fields =
+                AF.fields User
+                    |> AF.textField "Name" .name []
+                    |> AF.checkboxField "Admin" .isAdmin []
+            , onSubmit = \_ model user -> ( { model | user = Just user }, SubCmd.none )
+            }
+        |> AP.view (\_ _ -> div [] [ text "moooore!" ])
 
 
 main : ElmAdmin () Model Msg
@@ -57,6 +56,6 @@ main =
         }
         [ A.theme [ A.preferDarkMode ]
         , A.pages
-            [ A.single "User" createUser
+            [ A.single "/users/new" "User" createUser
             ]
         ]

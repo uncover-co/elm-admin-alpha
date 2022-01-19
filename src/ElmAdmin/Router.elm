@@ -28,11 +28,25 @@ emptyRouteParams =
     }
 
 
-pathFromString : String -> List String
+pathFromString : String -> ( List String, List String )
 pathFromString pathString =
     pathString
         |> String.split "/"
-        |> List.filter (not << String.isEmpty)
+        |> List.foldl
+            (\s ( path, pathParams_ ) ->
+                if s == "" then
+                    ( path, pathParams_ )
+
+                else
+                    ( s :: path
+                    , if String.startsWith ":" s then
+                        s :: pathParams_
+
+                      else
+                        pathParams_
+                    )
+            )
+            ( [], [] )
 
 
 pathToString : List String -> String

@@ -1,10 +1,9 @@
 module ElmAdmin exposing
     ( admin, pages, protectedPages, theme, ElmAdmin
     , single, url, external, group, visualGroup, folderGroup, NavigationItem
-    , dynamic, hidden, disabled, Options
-    , page, fullPage, resourcePage, Page, RouteParams
+    , hidden, disabled, Options
+    , RouteParams
     , preferDarkMode, preventDarkMode, darkTheme, lightTheme, darkModeClass
-    , formPage
     )
 
 {-|
@@ -39,15 +38,14 @@ module ElmAdmin exposing
 import Browser
 import Browser.Navigation exposing (..)
 import Dict exposing (Dict)
-import ElmAdmin.Form
-import ElmAdmin.Model exposing (Effect(..), Msg(..))
-import ElmAdmin.Router exposing (parsePathParams, pathFromString, pathToString)
-import ElmAdmin.UI.Form
+import ElmAdmin.Main
+import ElmAdmin.Page exposing (Page)
+import ElmAdmin.Router
+import ElmAdmin.Shared exposing (Effect(..), Msg(..))
 import ElmAdmin.UI.Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Set exposing (Set)
-import SubCmd exposing (SubCmd)
 import ThemeSpec
 import Url exposing (Url)
 
@@ -58,12 +56,7 @@ import Url exposing (Url)
 
 {-| -}
 type alias ElmAdmin flags model msg =
-    ElmAdmin.Model.ElmAdmin flags model msg
-
-
-{-| -}
-type Page model msg
-    = Page (ElmAdmin.Model.Page model msg)
+    ElmAdmin.Shared.ElmAdmin flags model msg
 
 
 {-| -}
@@ -80,8 +73,9 @@ type alias RouteParams =
 
 {-| -}
 type NavigationItem model msg
-    = External String String
-    | Url (ElmAdmin.Model.Page model msg)
+    = Invalid String String
+    | External String String
+    | Url (NavItemHidden model msg)
     | Single (NavItemData model msg)
     | Group
         { main : NavItemData model msg
@@ -94,10 +88,15 @@ type NavigationItem model msg
 
 
 type alias NavItemData model msg =
-    { page : ElmAdmin.Model.Page model msg
-    , pathParams : List String
+    { route : ElmAdmin.Page.Route model msg
     , title : RouteParams -> model -> String
     , hidden : RouteParams -> model -> Bool
+    , disabled : RouteParams -> model -> Bool
+    }
+
+
+type alias NavItemHidden model msg =
+    { route : ElmAdmin.Page.Route model msg
     , disabled : RouteParams -> model -> Bool
     }
 
@@ -124,14 +123,22 @@ external =
     url Home.page
 
 -}
-url : Page model msg -> NavigationItem model msg
-url (Page p) =
-    Url p
+url : String -> Page model msg params -> NavigationItem model msg
+url path page =
+    case ElmAdmin.Page.route page path of
+        Just route ->
+            Url
+                { route = route
+                , disabled = \_ _ -> False
+                }
+
+        Nothing ->
+            Invalid (ElmAdmin.Page.toTitle page) path
 
 
 {-| Used for creating a single page with a nav link.
 
-    single "User" User.page
+    single "/users/:userId" "User" User.page
 
 Note that all page links with params will only appear if they are already present on the current page path.
 
@@ -143,15 +150,19 @@ Note that all page links with params will only appear if they are already presen
     -- But if the user is on "/", no ":userId" is available so the link will disappear.
 
 -}
-single : String -> Page model msg -> NavigationItem model msg
-single title (Page p) =
-    Single
-        { page = p
-        , pathParams = ElmAdmin.Router.parsePathParams p.path
-        , hidden = \_ _ -> False
-        , title = \_ _ -> title
-        , disabled = \_ _ -> False
-        }
+single : String -> String -> Page model msg params -> NavigationItem model msg
+single path title page =
+    case ElmAdmin.Page.route page path of
+        Just route ->
+            Single
+                { route = route
+                , hidden = \_ _ -> False
+                , title = \_ _ -> title
+                , disabled = \_ _ -> False
+                }
+
+        Nothing ->
+            Invalid (ElmAdmin.Page.toTitle page) path
 
 
 {-| Used for creating grouped pages. Note that the "group" is also a page and if it is hidden or disabled by any means, then the whole group will follow.
@@ -165,22 +176,25 @@ single title (Page p) =
 -}
 group :
     String
-    -> Page model msg
+    -> String
+    -> Page model msg params
     -> List (NavigationItem model msg)
     -> NavigationItem model msg
-group title main items =
-    case main of
-        Page p ->
+group path title page items =
+    case ElmAdmin.Page.route page path of
+        Just route ->
             Group
                 { main =
-                    { page = p
-                    , pathParams = ElmAdmin.Router.parsePathParams p.path
+                    { route = route
                     , hidden = \_ _ -> False
                     , title = \_ _ -> title
                     , disabled = \_ _ -> False
                     }
                 , items = items
                 }
+
+        Nothing ->
+            Invalid (ElmAdmin.Page.toTitle page) path
 
 
 {-| A group that shows its items only if one of them is the current active path.
@@ -195,27 +209,31 @@ group title main items =
 -}
 folderGroup :
     String
-    -> Page model msg
+    -> String
+    -> Page model msg params
     -> List (NavigationItem model msg)
     -> NavigationItem model msg
-folderGroup title ((Page main_) as main__) items_ =
+folderGroup path title page items_ =
     let
         paths_ : List (NavigationItem model msg) -> Set String -> Set String
         paths_ items__ acc_ =
             List.foldl
                 (\item acc ->
                     case item of
+                        Invalid _ _ ->
+                            acc
+
                         External _ _ ->
                             acc
 
                         Single p ->
-                            Set.insert (pathToString p.page.path) acc
+                            Set.insert p.route.path acc
 
                         Url p ->
-                            Set.insert (pathToString p.path) acc
+                            Set.insert p.route.path acc
 
                         Group { main, items } ->
-                            Set.insert (pathToString main.page.path) acc
+                            Set.insert main.route.path acc
                                 |> paths_ items
 
                         VisualGroup { items } ->
@@ -225,14 +243,15 @@ folderGroup title ((Page main_) as main__) items_ =
                 items__
 
         paths =
-            paths_ items_ (Set.fromList [ pathToString main_.path ])
+            paths_ items_ (Set.fromList [ path ])
     in
     group
+        path
         title
-        main__
+        page
         [ visualGroup "" items_
             |> hidden
-                (\{ path } _ -> not (Set.member path paths))
+                (\r _ -> not (Set.member r.path paths))
         ]
 
 
@@ -267,6 +286,9 @@ visualGroup title items =
 hidden : (RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
 hidden fn a =
     case a of
+        Invalid _ _ ->
+            a
+
         External _ _ ->
             a
 
@@ -292,6 +314,9 @@ hidden fn a =
 disabled : (RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
 disabled fn a =
     case a of
+        Invalid _ _ ->
+            a
+
         External _ _ ->
             a
 
@@ -300,23 +325,23 @@ disabled fn a =
 
         Single i ->
             let
-                page_ : ElmAdmin.Model.Page model msg
-                page_ =
-                    i.page
+                route : ElmAdmin.Page.Route model msg
+                route =
+                    i.route
             in
-            Single { i | disabled = fn, page = { page_ | disabled = fn } }
+            Single { i | disabled = fn, route = { route | disabled = fn } }
 
         Group { main, items } ->
             let
-                page_ : ElmAdmin.Model.Page model msg
-                page_ =
-                    main.page
+                route : ElmAdmin.Page.Route model msg
+                route =
+                    main.route
             in
             Group
                 { main =
                     { main
                         | disabled = fn
-                        , page = { page_ | disabled = fn }
+                        , route = { route | disabled = fn }
                     }
                 , items =
                     List.map (disableSubItem fn) items
@@ -343,6 +368,9 @@ disableSubItem fn item =
             fn routeParams model || fn2 routeParams model
     in
     case item of
+        Invalid _ _ ->
+            item
+
         External _ _ ->
             item
 
@@ -351,32 +379,32 @@ disableSubItem fn item =
 
         Single i ->
             let
-                page_ : ElmAdmin.Model.Page model msg
-                page_ =
-                    i.page
+                route : ElmAdmin.Page.Route model msg
+                route =
+                    i.route
             in
             Single
                 { i
                     | disabled = sumDisabled i.disabled
-                    , page =
-                        { page_
-                            | disabled = sumDisabled page_.disabled
+                    , route =
+                        { route
+                            | disabled = sumDisabled route.disabled
                         }
                 }
 
         Group { main, items } ->
             let
-                page_ : ElmAdmin.Model.Page model msg
-                page_ =
-                    main.page
+                route : ElmAdmin.Page.Route model msg
+                route =
+                    main.route
             in
             Group
                 { main =
                     { main
                         | disabled = sumDisabled main.disabled
-                        , page =
-                            { page_
-                                | disabled = sumDisabled page_.disabled
+                        , route =
+                            { route
+                                | disabled = sumDisabled route.disabled
                             }
                     }
                 , items =
@@ -393,285 +421,6 @@ disableSubItem fn item =
                 , items =
                     List.map (disableSubItem fn) items
                 }
-
-
-{-| Dynamic nav link label.
-
-    single "User" User.show
-        |> dynamic
-            (\{ pathParams } model ->
-                Dict.get ":userId" pathParams
-                    |> Maybe.andThen (username model)
-            )
-
--}
-dynamic : (RouteParams -> model -> String) -> NavigationItem model msg -> NavigationItem model msg
-dynamic fn a =
-    case a of
-        External _ _ ->
-            a
-
-        Url _ ->
-            a
-
-        Single i ->
-            Single { i | title = fn }
-
-        Group { main, items } ->
-            Group
-                { main = { main | title = fn }
-                , items = items
-                }
-
-        VisualGroup { main, items } ->
-            VisualGroup { main = { main | title = fn }, items = items }
-
-
-
--- Pages
-
-
-{-| Creates a page.
-
-    usersIndex : Page model msg
-    usersIndex =
-        viewPage "/users" "Users"
-            (\routeParams model ->
-                div [] [ ... ]
-            )
-
--}
-page :
-    String
-    -> String
-    -> (RouteParams -> model -> Html msg)
-    -> Page model msg
-page path title view =
-    Page
-        { path = pathFromString path
-        , title = \_ _ -> title
-        , init = \_ model -> ( model, SubCmd.none )
-        , update = \_ _ _ model -> ( model, SubCmd.none )
-        , subscriptions = \_ _ -> Sub.none
-        , view =
-            \_ routeParams model ->
-                view routeParams model
-                    |> Html.map GotMsg
-        , disabled = \_ _ -> False
-        }
-
-
-{-| Creates a page with it's own Elm architecture.
-
-  - Your `init` will run every time the page gets initialized.
-
-  - Your `update` will run _after_ your main update (and any commands will be batched).
-
-  - Your `subscriptions` will be active only while this page is active.
-
-```
-usersIndex : Page model msg
-usersIndex =
-    fullPage "/users"
-        { title = \routeParams model -> ...
-        , init = \routeParams model -> ...
-        , update = \routeParams model -> ...
-        , subscriptions = \routeParams model -> ...
-        , view = \routeParams model -> ...
-        }
-```
-
--}
-fullPage :
-    String
-    ->
-        { title : RouteParams -> model -> String
-        , init : RouteParams -> model -> ( model, Cmd msg )
-        , update : RouteParams -> msg -> model -> ( model, Cmd msg )
-        , subscriptions : RouteParams -> model -> Sub msg
-        , view : RouteParams -> model -> Html msg
-        }
-    -> Page model msg
-fullPage path props =
-    Page
-        { path = pathFromString path
-        , title = props.title
-        , init =
-            \r m ->
-                props.init r m
-                    |> Tuple.mapSecond SubCmd.cmd
-        , update =
-            \_ r msg model ->
-                case msg of
-                    GotMsg msg_ ->
-                        props.update r msg_ model
-                            |> Tuple.mapSecond SubCmd.cmd
-
-                    _ ->
-                        ( model, SubCmd.none )
-        , subscriptions = props.subscriptions
-        , view =
-            \_ routeParams model ->
-                props.view routeParams model
-                    |> Html.map GotMsg
-        , disabled = \_ _ -> False
-        }
-
-
-{-| Creates a `fullPage` with quick access to a "resource".
-
-    usersShow : Page model msg
-    usersShow =
-        resourcePage "/users/:userId"
-            { resource = \{ pathParams } model ->
-                pathParams
-                    |> Dict.get ":userId"
-                    |> Maybe.andThen (getUser model)
-            , title = \routeParams model user -> user.name
-            , init = \routeParams model user -> ...
-            , update = \routeParams model user -> ...
-            , subscriptions = \routeParams model user -> ...
-            , view = \routeParams model user -> ...
-            }
-
--}
-resourcePage :
-    String
-    ->
-        { resource : RouteParams -> model -> Maybe resource
-        , title : RouteParams -> model -> resource -> String
-        , init : RouteParams -> model -> resource -> ( model, Cmd msg )
-        , update : RouteParams -> msg -> model -> resource -> ( model, Cmd msg )
-        , subscriptions : RouteParams -> model -> resource -> Sub msg
-        , view : RouteParams -> model -> resource -> Html msg
-        }
-    -> Page model msg
-resourcePage path props =
-    Page
-        { path =
-            pathFromString path
-        , disabled =
-            \_ _ -> False
-        , title =
-            \params_ model ->
-                props.resource params_ model
-                    |> Maybe.map (props.title params_ model)
-                    |> Maybe.withDefault ""
-        , init =
-            \params_ model ->
-                props.resource params_ model
-                    |> Maybe.map (props.init params_ model)
-                    |> Maybe.map (Tuple.mapSecond SubCmd.cmd)
-                    |> Maybe.withDefault ( model, SubCmd.none )
-        , update =
-            \_ params_ msg model ->
-                case msg of
-                    GotMsg msg_ ->
-                        props.resource params_ model
-                            |> Maybe.map (props.update params_ msg_ model)
-                            |> Maybe.map (Tuple.mapSecond SubCmd.cmd)
-                            |> Maybe.withDefault ( model, SubCmd.none )
-
-                    _ ->
-                        ( model, SubCmd.none )
-        , subscriptions =
-            \params_ model ->
-                props.resource params_ model
-                    |> Maybe.map (props.subscriptions params_ model)
-                    |> Maybe.withDefault Sub.none
-        , view =
-            \_ params_ model ->
-                props.resource params_ model
-                    |> Maybe.map (props.view params_ model)
-                    |> Maybe.withDefault (div [] [])
-                    |> Html.map GotMsg
-        }
-
-
-{-|
-
-    formPage "/users/:userId"
-        "Create User"
-        { resource =
-            \{ pathParams } model ->
-                Dict.get ":userId" pathParams
-                    |> Maybe.andThen (getUser model)
-        , form =
-            form User
-                |> textField "First Name" .name []
-                |> textField "Last Name" .lastname []
-        , onSubmit =
-            \_ _ user ->
-                createUser user
-        }
-
--}
-formPage :
-    String
-    -> String
-    ->
-        { init : RouteParams -> model -> Maybe resource
-        , fields : ElmAdmin.Form.Fields resource
-        , onSubmit : RouteParams -> model -> resource -> ( model, SubCmd msg Effect )
-        }
-    -> Page model msg
-formPage path title props =
-    Page
-        { path =
-            pathFromString path
-        , disabled =
-            \_ _ -> False
-        , title =
-            \_ _ -> title
-        , init =
-            \routeParams model ->
-                props.init routeParams model
-                    |> Maybe.map
-                        (\resource ->
-                            ( model
-                            , SubCmd.effect
-                                (ElmAdmin.Form.initFields resource props.fields
-                                    |> SetFormModel
-                                )
-                            )
-                        )
-                    |> Maybe.withDefault ( model, SubCmd.none )
-        , update =
-            \formModel routeParams msg model ->
-                if formModel.initialized then
-                    case msg of
-                        SubmitForm ->
-                            props.fields.resolver formModel
-                                |> Maybe.map (props.onSubmit routeParams model)
-                                |> Maybe.withDefault ( model, SubCmd.none )
-
-                        _ ->
-                            ( model, SubCmd.none )
-
-                else
-                    props.init routeParams model
-                        |> Maybe.map
-                            (\resource ->
-                                ( model
-                                , SubCmd.effect
-                                    (ElmAdmin.Form.initFields resource props.fields
-                                        |> SetFormModel
-                                    )
-                                )
-                            )
-                        |> Maybe.withDefault ( model, SubCmd.none )
-        , subscriptions =
-            \_ _ -> Sub.none
-        , view =
-            \formModel _ _ ->
-                if formModel.initialized then
-                    ElmAdmin.UI.Form.view
-                        formModel
-                        props.fields
-
-                else
-                    div [] [ text "Loading…" ]
-        }
 
 
 
@@ -841,67 +590,60 @@ admin title props options_ =
                 ThemeOptions d ->
                     d
 
-        pagesDataList_ :
+        routes :
             List (NavigationItem m msg)
-            -> List (ElmAdmin.Model.Page m msg)
-        pagesDataList_ xs =
+            -> List (ElmAdmin.Page.Route m msg)
+        routes xs =
             xs
                 |> List.foldl
                     (\navItem acc ->
                         case navItem of
+                            Invalid _ _ ->
+                                acc
+
                             External _ _ ->
                                 acc
 
                             Url p ->
-                                p :: acc
+                                p.route :: acc
 
                             Single navItem_ ->
-                                navItem_.page :: acc
+                                navItem_.route :: acc
 
                             Group navItem_ ->
-                                pagesDataList_ navItem_.items ++ (navItem_.main.page :: acc)
+                                routes navItem_.items ++ (navItem_.main.route :: acc)
 
                             VisualGroup navItem_ ->
-                                pagesDataList_ navItem_.items ++ acc
+                                routes navItem_.items ++ acc
                     )
                     []
 
-        pagesDataList : List (ElmAdmin.Model.Page model msg)
-        pagesDataList =
-            pagesDataList_ options.pages
+        pagesRouteList : List (ElmAdmin.Page.Route model msg)
+        pagesRouteList =
+            routes options.pages
 
-        protectedPagesDataList : List (ElmAdmin.Model.Page protectedModel msg)
-        protectedPagesDataList =
-            pagesDataList_ options.protectedPages
+        protectedPagesRouteList : List (ElmAdmin.Page.Route protectedModel msg)
+        protectedPagesRouteList =
+            routes options.protectedPages
 
-        pageRoutes : Dict String (List (ElmAdmin.Model.Page model msg))
+        pageRoutes : Dict String (List (ElmAdmin.Page.Route model msg))
         pageRoutes =
-            ElmAdmin.Router.toCache .path pagesDataList
+            ElmAdmin.Router.toCache .pathList pagesRouteList
 
-        protectedPageRoutes : Dict String (List (ElmAdmin.Model.Page protectedModel msg))
+        protectedPageRoutes : Dict String (List (ElmAdmin.Page.Route protectedModel msg))
         protectedPageRoutes =
-            ElmAdmin.Router.toCache .path protectedPagesDataList
+            ElmAdmin.Router.toCache .pathList protectedPagesRouteList
 
-        pages_ : Dict String (ElmAdmin.Model.Page model msg)
+        pages_ : Dict String (ElmAdmin.Page.Route model msg)
         pages_ =
-            pagesDataList
-                |> List.map
-                    (\page_ ->
-                        ( pathToString page_.path
-                        , page_
-                        )
-                    )
+            pagesRouteList
+                |> List.map (\route -> ( route.path, route ))
                 |> Dict.fromList
 
-        protectedPages_ : Dict String (ElmAdmin.Model.Page protectedModel msg)
+        protectedPages_ : Dict String (ElmAdmin.Page.Route protectedModel msg)
         protectedPages_ =
-            protectedPagesDataList
-                |> List.map
-                    (\page_ ->
-                        ( pathToString page_.path
-                        , page_
-                        )
-                    )
+            protectedPagesRouteList
+                |> List.map (\route -> ( route.path, route ))
                 |> Dict.fromList
 
         viewNavItems : List (ElmAdmin.UI.Nav.UINavItem model)
@@ -916,7 +658,7 @@ admin title props options_ =
         { onUrlChange = OnUrlChange
         , onUrlRequest = OnUrlRequest
         , init =
-            ElmAdmin.Model.init
+            ElmAdmin.Main.init
                 { init = props.init
                 , pageRoutes = pageRoutes
                 , protectedPageRoutes = protectedPageRoutes
@@ -925,7 +667,7 @@ admin title props options_ =
                 , preferDarkMode = theme_.preferDarkMode
                 }
         , update =
-            ElmAdmin.Model.update
+            ElmAdmin.Main.update
                 { update = props.update
                 , pages = pages_
                 , protectedPages = protectedPages_
@@ -935,7 +677,7 @@ admin title props options_ =
                 , protectedToModel = options.protectedToModel
                 }
         , subscriptions =
-            ElmAdmin.Model.subscriptions
+            ElmAdmin.Main.subscriptions
                 { subscriptions = props.subscriptions
                 , pages = pages_
                 , protectedPages = protectedPages_
@@ -943,7 +685,7 @@ admin title props options_ =
                 , protectedToModel = options.protectedToModel
                 }
         , view =
-            ElmAdmin.Model.view
+            ElmAdmin.Main.view
                 { title = title
                 , navItems = viewNavItems
                 , protectedNavItems = viewProtectedNavItems
@@ -969,6 +711,9 @@ viewNavItemsFromNavigatiomItems ps =
                 |> List.foldl
                     (\navItem acc ->
                         case navItem of
+                            Invalid _ _ ->
+                                acc
+
                             External label href_ ->
                                 ElmAdmin.UI.Nav.External label href_ :: acc
 
@@ -978,8 +723,8 @@ viewNavItemsFromNavigatiomItems ps =
                             Single navItem_ ->
                                 ElmAdmin.UI.Nav.Single
                                     { title = navItem_.title
-                                    , path = pathToString navItem_.page.path
-                                    , pathParams = parsePathParams navItem_.page.path
+                                    , path = navItem_.route.path
+                                    , pathParams = navItem_.route.pathParams
                                     , hidden = navItem_.hidden
                                     , disabled = navItem_.disabled
                                     }
@@ -989,8 +734,8 @@ viewNavItemsFromNavigatiomItems ps =
                                 ElmAdmin.UI.Nav.Group
                                     { main =
                                         { title = main.title
-                                        , path = pathToString main.page.path
-                                        , pathParams = parsePathParams main.page.path
+                                        , path = main.route.path
+                                        , pathParams = main.route.pathParams
                                         , hidden = main.hidden
                                         , disabled = main.disabled
                                         }

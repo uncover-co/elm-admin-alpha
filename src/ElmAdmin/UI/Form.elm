@@ -2,8 +2,7 @@ module ElmAdmin.UI.Form exposing (..)
 
 import Dict
 import ElmAdmin.Form exposing (Field(..), FieldValue(..), Fields, FormModel)
-import ElmAdmin.Model exposing (Msg(..))
-import ElmAdmin.Router exposing (RouteParams)
+import ElmAdmin.Shared exposing (Msg(..))
 import ElmWidgets as W
 import Html exposing (..)
 import Html.Attributes exposing (..)
