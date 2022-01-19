@@ -47,6 +47,7 @@ pathFromString pathString =
                     )
             )
             ( [], [] )
+        |> Tuple.mapFirst List.reverse
 
 
 pathToString : List String -> String

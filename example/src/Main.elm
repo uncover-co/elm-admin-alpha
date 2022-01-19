@@ -58,4 +58,10 @@ main =
         , A.pages
             [ A.single "/users/new" "User" createUser
             ]
+        , A.protectedPages
+            { fromModel = \model -> Just model
+            , toModel = \_ model -> model
+            }
+            [ A.single "/users/new" "User" createUser
+            ]
         ]

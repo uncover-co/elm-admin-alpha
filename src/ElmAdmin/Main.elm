@@ -26,17 +26,21 @@ import Url exposing (Url)
 oneOfPageData :
     Dict String (List (Route model msg))
     -> Url
-    -> model
-    -> Maybe ( Route model msg, RouteParams )
-oneOfPageData pageRoutes url model =
-    ElmAdmin.Router.oneOf .pathList pageRoutes url
+    -> Maybe model
+    -> Maybe ( Route model msg, RouteParams, model )
+oneOfPageData pageRoutes url maybeModel =
+    maybeModel
         |> Maybe.andThen
-            (\( p, routeParams_ ) ->
-                if p.disabled routeParams_ model then
-                    Nothing
+            (\model ->
+                ElmAdmin.Router.oneOf .pathList pageRoutes url
+                    |> Maybe.andThen
+                        (\( p, routeParams_ ) ->
+                            if p.disabled routeParams_ model then
+                                Nothing
 
-                else
-                    Just ( p, routeParams_ )
+                            else
+                                Just ( p, routeParams_, model )
+                        )
             )
 
 
@@ -66,70 +70,48 @@ init props flags url navKey =
         ( initialModel_, initialCmd ) =
             props.init flags navKey
 
-        ( initialModel, initPageCmd, activeRouteParams ) =
-            case props.protectedModel initialModel_ of
-                Just protectedModel ->
-                    let
-                        activePage : Maybe ( Route protectedModel msg, RouteParams )
-                        activePage =
-                            oneOfPageData props.protectedPageRoutes url protectedModel
-
-                        activeRouteParams_ : Maybe RouteParams
-                        activeRouteParams_ =
-                            activePage
-                                |> Maybe.map Tuple.second
-                    in
-                    activePage
-                        |> Maybe.map
-                            (\( p, r ) ->
-                                p.page.init r protectedModel
-                                    |> SubModule.initWithEffect
-                                        { toMsg = GotMsg
-                                        , effectToMsg = GotEffect
-                                        }
-                            )
-                        |> Maybe.withDefault ( protectedModel, identity )
+        activeStuff =
+            case
+                oneOfPageData props.protectedPageRoutes url (props.protectedModel initialModel_)
+            of
+                Just ( route, routeParams_, protectedModel ) ->
+                    route.page.init routeParams_ protectedModel
+                        |> SubModule.initWithEffect
+                            { toMsg = GotMsg
+                            , effectToMsg = GotEffect
+                            }
                         |> (\( protectedModel_, initPageCmd_ ) ->
                                 ( props.protectedToModel initialModel_ protectedModel_
                                 , initPageCmd_
-                                , activeRouteParams_
+                                , routeParams_
                                 )
                            )
+                        |> Just
 
                 Nothing ->
-                    let
-                        activePage : Maybe ( Route model msg, RouteParams )
-                        activePage =
-                            oneOfPageData props.pageRoutes url initialModel_
-
-                        activeRouteParams_ : Maybe RouteParams
-                        activeRouteParams_ =
-                            activePage
-                                |> Maybe.map Tuple.second
-                    in
-                    activePage
+                    oneOfPageData props.pageRoutes url (Just initialModel_)
                         |> Maybe.map
-                            (\( p, r ) ->
-                                p.page.init r initialModel_
+                            (\( route, routeParams_, model ) ->
+                                route.page.init routeParams_ model
                                     |> SubModule.initWithEffect
                                         { toMsg = GotMsg
                                         , effectToMsg = GotEffect
                                         }
+                                    |> (\( model_, initPageCmd_ ) ->
+                                            ( model_, initPageCmd_, routeParams_ )
+                                       )
                             )
-                        |> Maybe.withDefault ( initialModel_, identity )
-                        |> (\( initialModel__, cmd_ ) ->
-                                ( initialModel__
-                                , cmd_
-                                , activeRouteParams_
-                                )
-                           )
 
-        routeParams =
-            activeRouteParams
-                |> Maybe.withDefault ElmAdmin.Router.emptyRouteParams
+        ( initialModel, initPageCmd, routeParams ) =
+            activeStuff
+                |> Maybe.withDefault
+                    ( initialModel_
+                    , identity
+                    , ElmAdmin.Router.emptyRouteParams
+                    )
 
         adminCmd =
-            if activeRouteParams == Nothing && url.path /= "/" then
+            if activeStuff == Nothing && url.path /= "/" then
                 Browser.Navigation.replaceUrl navKey "/"
 
             else
@@ -167,6 +149,9 @@ update props msg model =
             props.protectedModel model.model
     in
     case msg of
+        DoNothing ->
+            ( model, Cmd.none )
+
         OnUrlRequest request ->
             case request of
                 External url ->
@@ -182,45 +167,46 @@ update props msg model =
         OnUrlChange url ->
             let
                 activeRoute =
-                    case protectedModel of
-                        Just protectedModel_ ->
-                            oneOfPageData props.protectedPageRoutes url protectedModel_
-                                |> Maybe.map
-                                    (\( route, routeParams ) ->
-                                        let
-                                            ( m, cmd ) =
-                                                enabledPageData routeParams protectedModel_ route
-                                                    |> Maybe.map
-                                                        (\p ->
-                                                            p.page.init routeParams protectedModel_
-                                                                |> SubModule.initWithEffect
-                                                                    { toMsg = GotMsg
-                                                                    , effectToMsg = GotEffect
-                                                                    }
-                                                        )
-                                                    |> Maybe.withDefault ( protectedModel_, identity )
-                                        in
-                                        ( props.protectedToModel model.model m, cmd, routeParams )
-                                    )
+                    case oneOfPageData props.protectedPageRoutes url protectedModel of
+                        Just ( route, routeParams, protectedModel_ ) ->
+                            let
+                                ( m, cmd ) =
+                                    enabledPageData routeParams protectedModel_ route
+                                        |> Maybe.map
+                                            (\p ->
+                                                p.page.init routeParams protectedModel_
+                                                    |> SubModule.initWithEffect
+                                                        { toMsg = GotMsg
+                                                        , effectToMsg = GotEffect
+                                                        }
+                                            )
+                                        |> Maybe.withDefault ( protectedModel_, identity )
+                            in
+                            ( props.protectedToModel model.model m, cmd, routeParams )
+                                |> Just
 
                         Nothing ->
-                            oneOfPageData props.pageRoutes url model.model
+                            let
+                                _ =
+                                    Debug.log "h" props.pageRoutes
+                            in
+                            oneOfPageData props.pageRoutes url (Just model.model)
                                 |> Maybe.map
-                                    (\( page, routeParams ) ->
+                                    (\( page, routeParams, model_ ) ->
                                         let
-                                            ( m, initPage ) =
-                                                enabledPageData routeParams model.model page
+                                            ( model__, initPage ) =
+                                                enabledPageData routeParams model_ page
                                                     |> Maybe.map
                                                         (\p ->
-                                                            p.page.init routeParams model.model
+                                                            p.page.init routeParams model_
                                                                 |> SubModule.initWithEffect
                                                                     { toMsg = GotMsg
                                                                     , effectToMsg = GotEffect
                                                                     }
                                                         )
-                                                    |> Maybe.withDefault ( model.model, identity )
+                                                    |> Maybe.withDefault ( model_, identity )
                                         in
-                                        ( m, initPage, routeParams )
+                                        ( model__, initPage, routeParams )
                                     )
             in
             case activeRoute of

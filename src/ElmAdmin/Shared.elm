@@ -28,7 +28,8 @@ type alias Model model =
 
 
 type Msg msg
-    = OnUrlRequest UrlRequest
+    = DoNothing
+    | OnUrlRequest UrlRequest
     | OnUrlChange Url
     | ToggleDarkMode
     | GotMsg msg

@@ -38,10 +38,12 @@ module ElmAdmin exposing
 import Browser
 import Browser.Navigation exposing (..)
 import Dict exposing (Dict)
+import ElmAdmin.Form
 import ElmAdmin.Main
 import ElmAdmin.Page exposing (Page)
 import ElmAdmin.Router
 import ElmAdmin.Shared exposing (Effect(..), Msg(..))
+import ElmAdmin.UI.Invalid
 import ElmAdmin.UI.Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -653,53 +655,165 @@ admin title props options_ =
         viewProtectedNavItems : List (ElmAdmin.UI.Nav.UINavItem protectedModel)
         viewProtectedNavItems =
             viewNavItemsFromNavigatiomItems options.protectedPages
+
+        invalidRoutes : List ( String, String )
+        invalidRoutes =
+            let
+                invalidRoutes_ xs_ acc =
+                    xs_
+                        |> List.foldl
+                            (\item acc_ ->
+                                case item of
+                                    Invalid title_ path ->
+                                        ( title_, path ) :: acc_
+
+                                    Group { items } ->
+                                        invalidRoutes_ items acc_
+
+                                    VisualGroup { items } ->
+                                        invalidRoutes_ items acc_
+
+                                    _ ->
+                                        acc_
+                            )
+                            acc
+            in
+            invalidRoutes_ options.pages [] ++ invalidRoutes_ options.protectedPages []
+
+        duplicatedRoutes : List String
+        duplicatedRoutes =
+            let
+                invalidRoutes_ xs_ acc =
+                    xs_
+                        |> List.foldl
+                            (\item ( paths, duplicatedPaths ) ->
+                                case item of
+                                    Invalid _ path ->
+                                        if Set.member path paths then
+                                            ( paths, Set.insert path duplicatedPaths )
+
+                                        else
+                                            ( Set.insert path paths, duplicatedPaths )
+
+                                    External _ _ ->
+                                        ( paths, duplicatedPaths )
+
+                                    Url item_ ->
+                                        if Set.member item_.route.path paths then
+                                            ( paths, Set.insert item_.route.path duplicatedPaths )
+
+                                        else
+                                            ( Set.insert item_.route.path paths, duplicatedPaths )
+
+                                    Single item_ ->
+                                        if Set.member item_.route.path paths then
+                                            ( paths, Set.insert item_.route.path duplicatedPaths )
+
+                                        else
+                                            ( Set.insert item_.route.path paths, duplicatedPaths )
+
+                                    Group { main, items } ->
+                                        let
+                                            acc__ =
+                                                if Set.member main.route.path paths then
+                                                    ( paths, Set.insert main.route.path duplicatedPaths )
+
+                                                else
+                                                    ( Set.insert main.route.path paths, duplicatedPaths )
+                                        in
+                                        invalidRoutes_ items acc__
+
+                                    VisualGroup { items } ->
+                                        invalidRoutes_ items ( paths, duplicatedPaths )
+                            )
+                            acc
+
+                ( pagePaths, duplicatedPagePaths ) =
+                    invalidRoutes_ options.pages ( Set.empty, Set.empty )
+
+                ( protectedPagePaths, duplicatedProtectedPagePaths ) =
+                    invalidRoutes_ options.protectedPages ( Set.empty, Set.empty )
+            in
+            Set.intersect pagePaths protectedPagePaths
+                |> Set.union duplicatedPagePaths
+                |> Set.union duplicatedProtectedPagePaths
+                |> Set.toList
     in
-    Browser.application
-        { onUrlChange = OnUrlChange
-        , onUrlRequest = OnUrlRequest
-        , init =
-            ElmAdmin.Main.init
-                { init = props.init
-                , pageRoutes = pageRoutes
-                , protectedPageRoutes = protectedPageRoutes
-                , protectedModel = options.protectedModel
-                , protectedToModel = options.protectedToModel
-                , preferDarkMode = theme_.preferDarkMode
+    case ( invalidRoutes, duplicatedRoutes ) of
+        ( [], [] ) ->
+            Browser.application
+                { onUrlChange = OnUrlChange
+                , onUrlRequest = OnUrlRequest
+                , init =
+                    ElmAdmin.Main.init
+                        { init = props.init
+                        , pageRoutes = pageRoutes
+                        , protectedPageRoutes = protectedPageRoutes
+                        , protectedModel = options.protectedModel
+                        , protectedToModel = options.protectedToModel
+                        , preferDarkMode = theme_.preferDarkMode
+                        }
+                , update =
+                    ElmAdmin.Main.update
+                        { update = props.update
+                        , pages = pages_
+                        , protectedPages = protectedPages_
+                        , pageRoutes = pageRoutes
+                        , protectedPageRoutes = protectedPageRoutes
+                        , protectedModel = options.protectedModel
+                        , protectedToModel = options.protectedToModel
+                        }
+                , subscriptions =
+                    ElmAdmin.Main.subscriptions
+                        { subscriptions = props.subscriptions
+                        , pages = pages_
+                        , protectedPages = protectedPages_
+                        , protectedModel = options.protectedModel
+                        , protectedToModel = options.protectedToModel
+                        }
+                , view =
+                    ElmAdmin.Main.view
+                        { title = title
+                        , navItems = viewNavItems
+                        , protectedNavItems = viewProtectedNavItems
+                        , pages = pages_
+                        , protectedPages = protectedPages_
+                        , protectedModel = options.protectedModel
+                        , theme =
+                            { lightTheme = theme_.lightTheme
+                            , darkTheme = theme_.darkTheme
+                            , darkModeStrategy = theme_.darkModeStrategy
+                            , preventDarkMode = theme_.preventDarkMode
+                            }
+                        }
                 }
-        , update =
-            ElmAdmin.Main.update
-                { update = props.update
-                , pages = pages_
-                , protectedPages = protectedPages_
-                , pageRoutes = pageRoutes
-                , protectedPageRoutes = protectedPageRoutes
-                , protectedModel = options.protectedModel
-                , protectedToModel = options.protectedToModel
+
+        _ ->
+            Browser.application
+                { onUrlChange = OnUrlChange
+                , onUrlRequest = OnUrlRequest
+                , init =
+                    \flags _ key ->
+                        ( { navKey = key
+                          , model = props.init flags key |> Tuple.first
+                          , routeParams = ElmAdmin.Router.emptyRouteParams
+                          , darkMode = True
+                          , formModel = ElmAdmin.Form.empty
+                          }
+                        , Cmd.none
+                        )
+                , update = \_ model -> ( model, Cmd.none )
+                , subscriptions = \_ -> Sub.none
+                , view =
+                    \_ ->
+                        { title = title
+                        , body =
+                            [ ElmAdmin.UI.Invalid.view
+                                duplicatedRoutes
+                                invalidRoutes
+                            ]
+                        }
                 }
-        , subscriptions =
-            ElmAdmin.Main.subscriptions
-                { subscriptions = props.subscriptions
-                , pages = pages_
-                , protectedPages = protectedPages_
-                , protectedModel = options.protectedModel
-                , protectedToModel = options.protectedToModel
-                }
-        , view =
-            ElmAdmin.Main.view
-                { title = title
-                , navItems = viewNavItems
-                , protectedNavItems = viewProtectedNavItems
-                , pages = pages_
-                , protectedPages = protectedPages_
-                , protectedModel = options.protectedModel
-                , theme =
-                    { lightTheme = theme_.lightTheme
-                    , darkTheme = theme_.darkTheme
-                    , darkModeStrategy = theme_.darkModeStrategy
-                    , preventDarkMode = theme_.preventDarkMode
-                    }
-                }
-        }
 
 
 viewNavItemsFromNavigatiomItems : List (NavigationItem m msg) -> List (ElmAdmin.UI.Nav.UINavItem m)
