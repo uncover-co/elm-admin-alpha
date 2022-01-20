@@ -8,7 +8,7 @@ module ElmAdmin.Shared exposing
 
 import Browser exposing (UrlRequest)
 import Browser.Navigation
-import ElmAdmin.Form exposing (FieldValue, FormModel)
+import ElmAdmin.Internal.Form exposing (FieldValue, FormModel)
 import ElmAdmin.Router exposing (RouteParams)
 import Html exposing (..)
 import Html.Attributes exposing (..)

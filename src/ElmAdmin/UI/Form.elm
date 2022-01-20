@@ -1,7 +1,7 @@
 module ElmAdmin.UI.Form exposing (..)
 
 import Dict
-import ElmAdmin.Form exposing (Field(..), FieldValue(..), Fields, FormModel)
+import ElmAdmin.Internal.Form exposing (Field(..), FieldValue(..), Fields, FormModel)
 import ElmAdmin.Shared exposing (Msg(..))
 import ElmWidgets as W
 import Html exposing (..)
@@ -25,7 +25,7 @@ view formModel fields =
                                     W.textInput []
                                         { value = v
                                         , onInput =
-                                            ElmAdmin.Form.FieldValueString
+                                            ElmAdmin.Internal.Form.FieldValueString
                                                 >> UpdateFormField label
                                         }
                                 }
@@ -37,7 +37,7 @@ view formModel fields =
                                     W.checkbox []
                                         { value = v
                                         , onInput =
-                                            ElmAdmin.Form.FieldValueBool
+                                            ElmAdmin.Internal.Form.FieldValueBool
                                                 >> UpdateFormField label
                                         }
                                 }

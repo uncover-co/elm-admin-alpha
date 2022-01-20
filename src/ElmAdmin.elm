@@ -1,10 +1,9 @@
 module ElmAdmin exposing
-    ( admin, pages, protectedPages, theme, ElmAdmin
+    ( admin, pages, protectedPages, update, updateWithEffect, subscriptions, theme, ElmAdmin
     , single, url, external, group, visualGroup, folderGroup, NavigationItem
     , hidden, disabled, Options
     , RouteParams
-    , preferDarkMode, preventDarkMode, darkTheme, lightTheme, darkModeClass
-    , subscriptions, update, updateWithEffects
+    , preferDarkMode, darkTheme, lightTheme, darkModeClass, disableModeSwitch
     )
 
 {-|
@@ -12,7 +11,7 @@ module ElmAdmin exposing
 
 # Setup
 
-@docs admin, pages, protectedPages, theme, ElmAdmin
+@docs admin, pages, protectedPages, update, updateWithEffect, subscriptions, theme, ElmAdmin
 
 
 # Navigation
@@ -22,17 +21,17 @@ module ElmAdmin exposing
 
 # Navigation Options
 
-@docs dynamic, params, hidden, disabled, Options
+@docs hidden, disabled, Options
 
 
 # Pages
 
-@docs page, fullPage, resourcePage, Page, RouteParams
+@docs RouteParams
 
 
 # Themes
 
-@docs preferDarkMode, preventDarkMode, darkTheme, lightTheme, darkModeClass
+@docs preferDarkMode, darkTheme, lightTheme, darkModeClass, disableModeSwitch
 
 -}
 
@@ -40,8 +39,8 @@ import Browser
 import Browser.Navigation exposing (..)
 import Dict exposing (Dict)
 import ElmAdmin.Application
-import ElmAdmin.Form
-import ElmAdmin.Page exposing (Page)
+import ElmAdmin.Internal.Form
+import ElmAdmin.Internal.Page exposing (Page, Route)
 import ElmAdmin.Router
 import ElmAdmin.Shared exposing (Effect(..), Msg(..), SubCmd)
 import ElmAdmin.UI.Invalid
@@ -92,7 +91,7 @@ type NavigationItem model msg
 
 
 type alias NavItemData model msg =
-    { route : ElmAdmin.Page.Route model msg
+    { route : Route model msg
     , title : RouteParams -> model -> String
     , hidden : RouteParams -> model -> Bool
     , disabled : RouteParams -> model -> Bool
@@ -100,7 +99,7 @@ type alias NavItemData model msg =
 
 
 type alias NavItemHidden model msg =
-    { route : ElmAdmin.Page.Route model msg
+    { route : Route model msg
     , disabled : RouteParams -> model -> Bool
     }
 
@@ -129,7 +128,7 @@ external =
 -}
 url : String -> Page model msg params -> NavigationItem model msg
 url path page =
-    case ElmAdmin.Page.route page path of
+    case ElmAdmin.Internal.Page.route page path of
         Just route ->
             Url
                 { route = route
@@ -137,7 +136,7 @@ url path page =
                 }
 
         Nothing ->
-            Invalid (ElmAdmin.Page.toTitle page) path
+            Invalid (ElmAdmin.Internal.Page.toTitle page) path
 
 
 {-| Used for creating a single page with a nav link.
@@ -156,7 +155,7 @@ Note that all page links with params will only appear if they are already presen
 -}
 single : String -> String -> Page model msg params -> NavigationItem model msg
 single path title page =
-    case ElmAdmin.Page.route page path of
+    case ElmAdmin.Internal.Page.route page path of
         Just route ->
             Single
                 { route = route
@@ -166,7 +165,7 @@ single path title page =
                 }
 
         Nothing ->
-            Invalid (ElmAdmin.Page.toTitle page) path
+            Invalid (ElmAdmin.Internal.Page.toTitle page) path
 
 
 {-| Used for creating grouped pages. Note that the "group" is also a page and if it is hidden or disabled by any means, then the whole group will follow.
@@ -185,7 +184,7 @@ group :
     -> List (NavigationItem model msg)
     -> NavigationItem model msg
 group path title page items =
-    case ElmAdmin.Page.route page path of
+    case ElmAdmin.Internal.Page.route page path of
         Just route ->
             Group
                 { main =
@@ -198,7 +197,7 @@ group path title page items =
                 }
 
         Nothing ->
-            Invalid (ElmAdmin.Page.toTitle page) path
+            Invalid (ElmAdmin.Internal.Page.toTitle page) path
 
 
 {-| A group that shows its items only if one of them is the current active path.
@@ -329,7 +328,7 @@ disabled fn a =
 
         Single i ->
             let
-                route : ElmAdmin.Page.Route model msg
+                route : Route model msg
                 route =
                     i.route
             in
@@ -337,7 +336,7 @@ disabled fn a =
 
         Group { main, items } ->
             let
-                route : ElmAdmin.Page.Route model msg
+                route : Route model msg
                 route =
                     main.route
             in
@@ -383,7 +382,7 @@ disableSubItem fn item =
 
         Single i ->
             let
-                route : ElmAdmin.Page.Route model msg
+                route : Route model msg
                 route =
                     i.route
             in
@@ -398,7 +397,7 @@ disableSubItem fn item =
 
         Group { main, items } ->
             let
-                route : ElmAdmin.Page.Route model msg
+                route : Route model msg
                 route =
                     main.route
             in
@@ -440,8 +439,8 @@ type alias ThemeOptionsData =
     { lightTheme : ThemeSpec.Theme
     , darkTheme : ThemeSpec.Theme
     , preferDarkMode : Bool
-    , preventDarkMode : Bool
     , darkModeStrategy : ThemeSpec.DarkModeStrategy
+    , disableModeSwitch : Bool
     }
 
 
@@ -449,10 +448,10 @@ themeDefaults : ThemeOptions
 themeDefaults =
     ThemeOptions
         { preferDarkMode = False
-        , preventDarkMode = False
         , lightTheme = ThemeSpec.lightTheme
         , darkTheme = ThemeSpec.darkTheme
         , darkModeStrategy = ThemeSpec.ClassStrategy "eadm-dark"
+        , disableModeSwitch = False
         }
 
 
@@ -470,11 +469,11 @@ preferDarkMode (ThemeOptions options) =
     ThemeOptions { options | preferDarkMode = True }
 
 
-{-| Removes the dark/light mode functionality.
+{-| Prevents the user from selecting a dark or light mode.
 -}
-preventDarkMode : ThemeOptions -> ThemeOptions
-preventDarkMode (ThemeOptions options) =
-    ThemeOptions { options | preventDarkMode = True }
+disableModeSwitch : ThemeOptions -> ThemeOptions
+disableModeSwitch (ThemeOptions options) =
+    ThemeOptions { options | disableModeSwitch = True }
 
 
 {-| Sets the dark mode strategy. Check out [elm-theme-spec](https://package.elm-lang.org/packages/uncover-co/elm-theme-spec/latest/) for more.
@@ -532,6 +531,7 @@ defaultOptions =
         }
 
 
+{-| -}
 update : (RouteParams -> msg -> model -> ( model, Cmd msg )) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
 update update_ (Options options) =
     Options
@@ -543,11 +543,13 @@ update update_ (Options options) =
         }
 
 
-updateWithEffects : (RouteParams -> msg -> model -> ( model, SubCmd msg )) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
-updateWithEffects update_ (Options options) =
+{-| -}
+updateWithEffect : (RouteParams -> msg -> model -> ( model, SubCmd msg )) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
+updateWithEffect update_ (Options options) =
     Options { options | update = update_ }
 
 
+{-| -}
 subscriptions : (RouteParams -> model -> Sub msg) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
 subscriptions subscriptions_ (Options options) =
     Options
@@ -585,12 +587,12 @@ protectedPages { fromModel, toModel } protectedPages_ (Options options) =
 
 {-| Bootstraps your admin application.
 
-    admin "My Admin"
-        { init = init
-        , update = update
-        , subscriptions = subscriptions
+    admin
+        { title = "My Admin"
+        , init = init
         }
         [ theme [ preferDarkMode ]
+        , update myUpdate
         , pages
             [ A.external "Docs" "https://package.elm-lang.org/"
             , A.single "Home" Home.page
@@ -623,7 +625,7 @@ admin props options_ =
 
         routes :
             List (NavigationItem m msg)
-            -> List (ElmAdmin.Page.Route m msg)
+            -> List (Route m msg)
         routes xs =
             xs
                 |> List.foldl
@@ -649,29 +651,29 @@ admin props options_ =
                     )
                     []
 
-        pagesRouteList : List (ElmAdmin.Page.Route model msg)
+        pagesRouteList : List (Route model msg)
         pagesRouteList =
             routes options.pages
 
-        protectedPagesRouteList : List (ElmAdmin.Page.Route protectedModel msg)
+        protectedPagesRouteList : List (Route protectedModel msg)
         protectedPagesRouteList =
             routes options.protectedPages
 
-        pageRoutes : Dict String (List (ElmAdmin.Page.Route model msg))
+        pageRoutes : Dict String (List (Route model msg))
         pageRoutes =
             ElmAdmin.Router.toCache .pathList pagesRouteList
 
-        protectedPageRoutes : Dict String (List (ElmAdmin.Page.Route protectedModel msg))
+        protectedPageRoutes : Dict String (List (Route protectedModel msg))
         protectedPageRoutes =
             ElmAdmin.Router.toCache .pathList protectedPagesRouteList
 
-        pages_ : Dict String (ElmAdmin.Page.Route model msg)
+        pages_ : Dict String (Route model msg)
         pages_ =
             pagesRouteList
                 |> List.map (\route -> ( route.path, route ))
                 |> Dict.fromList
 
-        protectedPages_ : Dict String (ElmAdmin.Page.Route protectedModel msg)
+        protectedPages_ : Dict String (Route protectedModel msg)
         protectedPages_ =
             protectedPagesRouteList
                 |> List.map (\route -> ( route.path, route ))
@@ -812,7 +814,8 @@ admin props options_ =
                             { lightTheme = theme_.lightTheme
                             , darkTheme = theme_.darkTheme
                             , darkModeStrategy = theme_.darkModeStrategy
-                            , preventDarkMode = theme_.preventDarkMode
+                            , preferDarkMode = theme_.preferDarkMode
+                            , disableModeSwitch = theme_.disableModeSwitch
                             }
                         }
                 }
@@ -827,7 +830,7 @@ admin props options_ =
                           , model = props.init flags key |> Tuple.first
                           , routeParams = ElmAdmin.Router.emptyRouteParams
                           , darkMode = True
-                          , formModel = ElmAdmin.Form.empty
+                          , formModel = ElmAdmin.Internal.Form.empty
                           }
                         , Cmd.none
                         )

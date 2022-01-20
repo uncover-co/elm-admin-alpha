@@ -38,8 +38,8 @@ workspacesIndex =
 
 createUser : AP.Page Model Msg String
 createUser =
-    AP.pageWithParams "Create User"
-        (Dict.get ":userId")
+    AP.page "Create User"
+        |> AP.params (Dict.get ":userId")
         |> AP.view (\{ pathParams } _ -> div [] [ text pathParams ])
         |> AP.view (\_ _ -> div [] [ text "Ha! Two views mofo" ])
         |> AP.form

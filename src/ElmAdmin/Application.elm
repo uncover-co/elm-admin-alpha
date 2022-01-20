@@ -8,8 +8,8 @@ module ElmAdmin.Application exposing
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation
 import Dict exposing (Dict)
-import ElmAdmin.Form
-import ElmAdmin.Page exposing (Route)
+import ElmAdmin.Internal.Form
+import ElmAdmin.Internal.Page exposing (Route)
 import ElmAdmin.Router exposing (RouteParams)
 import ElmAdmin.Shared exposing (Effect(..), Model, Msg(..), SubCmd)
 import ElmAdmin.Styles
@@ -167,7 +167,7 @@ init props flags url navKey =
         Just routeInit ->
             ( { navKey = navKey
               , model = routeInit.model
-              , formModel = ElmAdmin.Form.empty
+              , formModel = ElmAdmin.Internal.Form.empty
               , routeParams = routeInit.routeParams
               , darkMode = props.preferDarkMode
               }
@@ -178,7 +178,7 @@ init props flags url navKey =
         Nothing ->
             ( { navKey = navKey
               , model = initialModel
-              , formModel = ElmAdmin.Form.empty
+              , formModel = ElmAdmin.Internal.Form.empty
               , routeParams = ElmAdmin.Router.emptyRouteParams
               , darkMode = props.preferDarkMode
               }
@@ -240,7 +240,7 @@ update props msg model =
                     ( { model
                         | model = routeInit.model
                         , routeParams = routeInit.routeParams
-                        , formModel = ElmAdmin.Form.empty
+                        , formModel = ElmAdmin.Internal.Form.empty
                       }
                     , Cmd.none
                     )
@@ -249,7 +249,7 @@ update props msg model =
                 Nothing ->
                     ( { model
                         | routeParams = ElmAdmin.Router.emptyRouteParams
-                        , formModel = ElmAdmin.Form.empty
+                        , formModel = ElmAdmin.Internal.Form.empty
                       }
                     , if url.path /= "/" then
                         Browser.Navigation.pushUrl model.navKey "/"
@@ -370,7 +370,8 @@ view :
         { lightTheme : ThemeSpec.Theme
         , darkTheme : ThemeSpec.Theme
         , darkModeStrategy : ThemeSpec.DarkModeStrategy
-        , preventDarkMode : Bool
+        , preferDarkMode : Bool
+        , disableModeSwitch : Bool
         }
     }
     -> Model model
@@ -416,8 +417,12 @@ view props model =
     in
     { title = props.title
     , body =
-        [ if props.theme.preventDarkMode then
-            ThemeSpec.globalProvider props.theme.lightTheme
+        [ if props.theme.disableModeSwitch then
+            if props.theme.preferDarkMode then
+                ThemeSpec.globalProvider props.theme.darkTheme
+
+            else
+                ThemeSpec.globalProvider props.theme.lightTheme
 
           else
             ThemeSpec.globalProviderWithDarkMode
@@ -438,7 +443,7 @@ view props model =
                                 ]
                                 [ text props.title ]
                             ]
-                        , if not props.theme.preventDarkMode && props.theme.darkModeStrategy /= ThemeSpec.SystemStrategy then
+                        , if not props.theme.disableModeSwitch && props.theme.darkModeStrategy /= ThemeSpec.SystemStrategy then
                             button
                                 [ class "eadm eadm-sidebar-dark-btn"
                                 , HE.onClick ToggleDarkMode
