@@ -3,6 +3,7 @@ module ElmAdmin.Shared exposing
     , ElmAdmin
     , Model
     , Msg(..)
+    , SubCmd
     )
 
 import Browser exposing (UrlRequest)
@@ -11,6 +12,7 @@ import ElmAdmin.Form exposing (FieldValue, FormModel)
 import ElmAdmin.Router exposing (RouteParams)
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import SubCmd
 import Url exposing (Url)
 
 
@@ -29,9 +31,9 @@ type alias Model model =
 
 type Msg msg
     = DoNothing
+    | ToggleDarkMode
     | OnUrlRequest UrlRequest
     | OnUrlChange Url
-    | ToggleDarkMode
     | GotMsg msg
     | GotEffect Effect
     | SubmitForm
@@ -40,3 +42,7 @@ type Msg msg
 
 type Effect
     = SetFormModel FormModel
+
+
+type alias SubCmd msg =
+    SubCmd.SubCmd msg Effect

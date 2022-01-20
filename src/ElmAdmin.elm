@@ -4,6 +4,7 @@ module ElmAdmin exposing
     , hidden, disabled, Options
     , RouteParams
     , preferDarkMode, preventDarkMode, darkTheme, lightTheme, darkModeClass
+    , subscriptions, update, updateWithEffects
     )
 
 {-|
@@ -38,16 +39,17 @@ module ElmAdmin exposing
 import Browser
 import Browser.Navigation exposing (..)
 import Dict exposing (Dict)
+import ElmAdmin.Application
 import ElmAdmin.Form
-import ElmAdmin.Main
 import ElmAdmin.Page exposing (Page)
 import ElmAdmin.Router
-import ElmAdmin.Shared exposing (Effect(..), Msg(..))
+import ElmAdmin.Shared exposing (Effect(..), Msg(..), SubCmd)
 import ElmAdmin.UI.Invalid
 import ElmAdmin.UI.Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Set exposing (Set)
+import SubCmd
 import ThemeSpec
 import Url exposing (Url)
 
@@ -456,7 +458,7 @@ themeDefaults =
 
 {-| Customize your admin theme through a list of options.
 -}
-theme : List (ThemeOptions -> ThemeOptions) -> Options model protectedModel msg -> Options model protectedModel msg
+theme : List (ThemeOptions -> ThemeOptions) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
 theme theme_ (Options options) =
     Options { options | theme = List.foldl (\fn a -> fn a) themeDefaults theme_ }
 
@@ -500,12 +502,15 @@ darkTheme theme_ (ThemeOptions options) =
 
 
 {-| -}
-type Options model protectedModel msg
-    = Options (OptionsData model protectedModel msg)
+type Options flags model protectedModel msg
+    = Options (OptionsData flags model protectedModel msg)
 
 
-type alias OptionsData model protectedModel msg =
+type alias OptionsData flags model protectedModel msg =
     { theme : ThemeOptions
+    , init : Maybe (flags -> Browser.Navigation.Key -> ( model, SubCmd msg ))
+    , update : RouteParams -> msg -> model -> ( model, SubCmd msg )
+    , subscriptions : RouteParams -> model -> Sub msg
     , pages : List (NavigationItem model msg)
     , protectedPages : List (NavigationItem protectedModel msg)
     , protectedModel : model -> Maybe protectedModel
@@ -513,10 +518,13 @@ type alias OptionsData model protectedModel msg =
     }
 
 
-defaultOptions : Options model protectedModel msg
+defaultOptions : Options flags model protectedModel msg
 defaultOptions =
     Options
         { theme = themeDefaults
+        , init = Nothing
+        , update = \_ _ model -> ( model, SubCmd.none )
+        , subscriptions = \_ _ -> Sub.none
         , pages = []
         , protectedPages = []
         , protectedModel = \_ -> Nothing
@@ -524,9 +532,35 @@ defaultOptions =
         }
 
 
+update : (RouteParams -> msg -> model -> ( model, Cmd msg )) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
+update update_ (Options options) =
+    Options
+        { options
+            | update =
+                \routeParams msg model ->
+                    update_ routeParams msg model
+                        |> Tuple.mapSecond SubCmd.cmd
+        }
+
+
+updateWithEffects : (RouteParams -> msg -> model -> ( model, SubCmd msg )) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
+updateWithEffects update_ (Options options) =
+    Options { options | update = update_ }
+
+
+subscriptions : (RouteParams -> model -> Sub msg) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
+subscriptions subscriptions_ (Options options) =
+    Options
+        { options
+            | subscriptions =
+                \routeParams model ->
+                    subscriptions_ routeParams model
+        }
+
+
 {-| Defines a list of pages for your application.
 -}
-pages : List (NavigationItem model msg) -> Options model protectedModel msg -> Options model protectedModel msg
+pages : List (NavigationItem model msg) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
 pages pages_ (Options options) =
     Options { options | pages = pages_ }
 
@@ -538,8 +572,8 @@ protectedPages :
     , toModel : model -> protectedModel -> model
     }
     -> List (NavigationItem protectedModel msg)
-    -> Options model protectedModel msg
-    -> Options model protectedModel msg
+    -> Options flags model protectedModel msg
+    -> Options flags model protectedModel msg
 protectedPages { fromModel, toModel } protectedPages_ (Options options) =
     Options
         { options
@@ -571,17 +605,12 @@ protectedPages { fromModel, toModel } protectedPages_ (Options options) =
 
 -}
 admin :
-    String
-    ->
-        { init : flags -> Browser.Navigation.Key -> ( model, Cmd msg )
-        , update : RouteParams -> msg -> model -> ( model, Cmd msg )
-        , subscriptions : RouteParams -> model -> Sub msg
-        }
-    -> List (Options model protectedModel msg -> Options model protectedModel msg)
+    { title : String, init : flags -> Browser.Navigation.Key -> ( model, Cmd msg ) }
+    -> List (Options flags model protectedModel msg -> Options flags model protectedModel msg)
     -> ElmAdmin flags model msg
-admin title props options_ =
+admin props options_ =
     let
-        options : OptionsData model protectedModel msg
+        options : OptionsData flags model protectedModel msg
         options =
             List.foldl (\fn a -> fn a) defaultOptions options_
                 |> (\(Options o) -> o)
@@ -745,7 +774,7 @@ admin title props options_ =
                 { onUrlChange = OnUrlChange
                 , onUrlRequest = OnUrlRequest
                 , init =
-                    ElmAdmin.Main.init
+                    ElmAdmin.Application.init
                         { init = props.init
                         , pageRoutes = pageRoutes
                         , protectedPageRoutes = protectedPageRoutes
@@ -754,8 +783,8 @@ admin title props options_ =
                         , preferDarkMode = theme_.preferDarkMode
                         }
                 , update =
-                    ElmAdmin.Main.update
-                        { update = props.update
+                    ElmAdmin.Application.update
+                        { update = options.update
                         , pages = pages_
                         , protectedPages = protectedPages_
                         , pageRoutes = pageRoutes
@@ -764,16 +793,16 @@ admin title props options_ =
                         , protectedToModel = options.protectedToModel
                         }
                 , subscriptions =
-                    ElmAdmin.Main.subscriptions
-                        { subscriptions = props.subscriptions
+                    ElmAdmin.Application.subscriptions
+                        { subscriptions = options.subscriptions
                         , pages = pages_
                         , protectedPages = protectedPages_
                         , protectedModel = options.protectedModel
                         , protectedToModel = options.protectedToModel
                         }
                 , view =
-                    ElmAdmin.Main.view
-                        { title = title
+                    ElmAdmin.Application.view
+                        { title = props.title
                         , navItems = viewNavItems
                         , protectedNavItems = viewProtectedNavItems
                         , pages = pages_
@@ -806,7 +835,7 @@ admin title props options_ =
                 , subscriptions = \_ -> Sub.none
                 , view =
                     \_ ->
-                        { title = title
+                        { title = props.title
                         , body =
                             [ ElmAdmin.UI.Invalid.view
                                 duplicatedRoutes

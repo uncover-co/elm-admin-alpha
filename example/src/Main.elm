@@ -6,12 +6,11 @@ import ElmAdmin.Form as AF
 import ElmAdmin.Page as AP
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import SubCmd exposing (SubCmd)
-import ThemeSpec
+import SubCmd
 
 
-type Msg
-    = SetUser User
+type alias Msg =
+    ()
 
 
 type alias Model =
@@ -31,10 +30,11 @@ emptyUser =
     }
 
 
-createUser : AP.Page Model Msg ()
+createUser : AP.Page Model Msg String
 createUser =
-    AP.page "Create User"
-        |> AP.view (\_ _ -> div [] [ text "Here bitchess" ])
+    AP.pageWithParams "Create User"
+        (Dict.get ":userId")
+        |> AP.view (\{ pathParams } _ -> div [] [ text pathParams ])
         |> AP.view (\_ _ -> div [] [ text "Ha! Two views mofo" ])
         |> AP.form
             { init = \_ _ -> Just emptyUser
@@ -49,19 +49,15 @@ createUser =
 
 main : ElmAdmin () Model Msg
 main =
-    admin "Admin"
-        { init = \_ _ -> ( { user = Nothing }, Cmd.none )
-        , update = \_ _ model -> ( model, Cmd.none )
-        , subscriptions = \_ _ -> Sub.none
+    admin
+        { title = "Admin"
+        , init = \_ _ -> ( { user = Nothing }, Cmd.none )
         }
         [ A.theme [ A.preferDarkMode ]
-        , A.pages
-            [ A.single "/users/new" "User" createUser
-            ]
         , A.protectedPages
             { fromModel = \model -> Just model
             , toModel = \_ model -> model
             }
-            [ A.single "/users/new" "User" createUser
+            [ A.single "/users/:userId" "User" createUser
             ]
         ]

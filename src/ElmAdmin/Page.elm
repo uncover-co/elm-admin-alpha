@@ -7,6 +7,7 @@ module ElmAdmin.Page exposing
     , initWithEffect
     , nav
     , page
+    , pageWithParams
     , route
     , subscriptions
     , title
@@ -19,10 +20,10 @@ module ElmAdmin.Page exposing
 import Dict exposing (Dict)
 import ElmAdmin.Form exposing (FormModel)
 import ElmAdmin.Router exposing (RouteParams, pathFromString)
-import ElmAdmin.Shared exposing (Effect(..), Msg(..))
+import ElmAdmin.Shared exposing (Effect(..), Msg(..), SubCmd)
 import ElmAdmin.UI.Form
 import Html as H exposing (Html)
-import SubCmd exposing (SubCmd)
+import SubCmd
 
 
 
@@ -41,8 +42,8 @@ type alias Route model msg =
 type alias PageData model msg =
     { nav : Maybe (RouteParams -> model -> String)
     , title : RouteParams -> model -> String
-    , init : RouteParams -> model -> ( model, SubCmd msg Effect )
-    , update : FormModel -> RouteParams -> Msg msg -> model -> ( model, SubCmd msg Effect )
+    , init : RouteParams -> model -> ( model, SubCmd msg )
+    , update : FormModel -> RouteParams -> Msg msg -> model -> ( model, SubCmd msg )
     , subscriptions : RouteParams -> model -> Sub (Msg msg)
     , view : FormModel -> RouteParams -> model -> Html (Msg msg)
     }
@@ -64,8 +65,8 @@ type Page model msg params
         , page :
             { nav : Maybe (PageRouteParams params -> model -> String)
             , title : PageRouteParams params -> model -> String
-            , init : PageRouteParams params -> model -> ( model, SubCmd msg Effect )
-            , update : FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, SubCmd msg Effect )
+            , init : PageRouteParams params -> model -> ( model, SubCmd msg )
+            , update : FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, SubCmd msg )
             , subscriptions : PageRouteParams params -> model -> Sub (Msg msg)
             , view : FormModel -> PageRouteParams params -> model -> Html (Msg msg)
             }
@@ -96,33 +97,33 @@ route page_ path =
                                 (\nav_ ->
                                     \routeParams model_ ->
                                         pageRouteParams page_ routeParams
-                                            |> Maybe.map (\params -> nav_ params model_)
+                                            |> Maybe.map (\params_ -> nav_ params_ model_)
                                             |> Maybe.withDefault ""
                                 )
                     , title =
                         \routeParams model_ ->
                             pageRouteParams page_ routeParams
-                                |> Maybe.map (\params -> p.page.title params model_)
+                                |> Maybe.map (\params_ -> p.page.title params_ model_)
                                 |> Maybe.withDefault ""
                     , init =
                         \routeParams model_ ->
                             pageRouteParams page_ routeParams
-                                |> Maybe.map (\params -> p.page.init params model_)
+                                |> Maybe.map (\params_ -> p.page.init params_ model_)
                                 |> Maybe.withDefault ( model_, SubCmd.none )
                     , update =
                         \formModel_ routeParams msg model_ ->
                             pageRouteParams page_ routeParams
-                                |> Maybe.map (\params -> p.page.update formModel_ params msg model_)
+                                |> Maybe.map (\params_ -> p.page.update formModel_ params_ msg model_)
                                 |> Maybe.withDefault ( model_, SubCmd.none )
                     , subscriptions =
                         \routeParams model_ ->
                             pageRouteParams page_ routeParams
-                                |> Maybe.map (\params -> p.page.subscriptions params model_)
+                                |> Maybe.map (\params_ -> p.page.subscriptions params_ model_)
                                 |> Maybe.withDefault Sub.none
                     , view =
                         \formModel_ routeParams model_ ->
                             pageRouteParams page_ routeParams
-                                |> Maybe.map (\params -> p.page.view formModel_ params model_)
+                                |> Maybe.map (\params_ -> p.page.view formModel_ params_ model_)
                                 |> Maybe.withDefault (H.text "")
                     }
                 }
@@ -199,6 +200,26 @@ page title_ =
         }
 
 
+pageWithParams :
+    String
+    -> (Dict String String -> Maybe params)
+    -> Page model msg params
+pageWithParams title_ toParams =
+    Page
+        { title = title_
+        , toParams = toParams
+        , sampleParams = Nothing
+        , page =
+            { nav = Nothing
+            , title = \_ _ -> title_
+            , init = \_ model -> ( model, SubCmd.none )
+            , update = \_ _ _ model -> ( model, SubCmd.none )
+            , subscriptions = \_ _ -> Sub.none
+            , view = \_ _ _ -> H.text ""
+            }
+        }
+
+
 toTitle : Page model msg params -> String
 toTitle (Page p) =
     p.title
@@ -247,7 +268,7 @@ init init_ (Page p) =
     Page { p | page = { page_ | init = init__ } }
 
 
-initWithEffect : (PageRouteParams params -> model -> ( model, SubCmd msg Effect )) -> Page model msg params -> Page model msg params
+initWithEffect : (PageRouteParams params -> model -> ( model, SubCmd msg )) -> Page model msg params -> Page model msg params
 initWithEffect init_ (Page p) =
     let
         page_ =
@@ -278,7 +299,7 @@ update update_ (Page p) =
     Page { p | page = { page_ | update = update__ } }
 
 
-updateWithEffect : (PageRouteParams params -> Msg msg -> model -> ( model, SubCmd msg Effect )) -> Page model msg params -> Page model msg params
+updateWithEffect : (PageRouteParams params -> Msg msg -> model -> ( model, SubCmd msg )) -> Page model msg params -> Page model msg params
 updateWithEffect update_ (Page p) =
     let
         page_ =
@@ -328,7 +349,7 @@ view view_ (Page p) =
 form :
     { init : PageRouteParams params -> model -> Maybe resource
     , fields : ElmAdmin.Form.Fields resource
-    , onSubmit : PageRouteParams params -> model -> resource -> ( model, SubCmd msg Effect )
+    , onSubmit : PageRouteParams params -> model -> resource -> ( model, SubCmd msg )
     }
     -> Page model msg params
     -> Page model msg params
@@ -410,11 +431,11 @@ form props (Page p) =
 
 
 withInit :
-    (PageRouteParams params -> model -> ( model, SubCmd msg Effect ))
-    -> (PageRouteParams params -> model -> ( model, SubCmd msg Effect ))
+    (PageRouteParams params -> model -> ( model, SubCmd msg ))
+    -> (PageRouteParams params -> model -> ( model, SubCmd msg ))
     -> PageRouteParams params
     -> model
-    -> ( model, SubCmd msg Effect )
+    -> ( model, SubCmd msg )
 withInit before after routeParams model =
     before routeParams model
         |> (\( model_, cmd ) ->
@@ -424,13 +445,13 @@ withInit before after routeParams model =
 
 
 withUpdate :
-    (FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, SubCmd msg Effect ))
-    -> (FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, SubCmd msg Effect ))
+    (FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, SubCmd msg ))
+    -> (FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, SubCmd msg ))
     -> FormModel
     -> PageRouteParams params
     -> Msg msg
     -> model
-    -> ( model, SubCmd msg Effect )
+    -> ( model, SubCmd msg )
 withUpdate before after formModel routeParams msg model =
     before formModel routeParams msg model
         |> (\( model_, cmd ) ->
