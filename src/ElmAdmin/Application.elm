@@ -380,20 +380,26 @@ view props model =
         protectedModel =
             props.protectedModel model.model
 
-        ( activePageTitle, activePageView ) =
-            case protectedModel of
-                Just protectedModel_ ->
-                    routeFromPath model.routeParams protectedModel_ props.protectedPages
-                        |> Maybe.map
-                            (\r ->
-                                ( h2
-                                    [ class "eadm eadm-page-title" ]
-                                    [ text (r.route.page.title r.routeParams r.model)
-                                    ]
-                                , r.route.page.view model.formModel model.routeParams r.model
+        protectedPage =
+            protectedModel
+                |> Maybe.andThen
+                    (\protectedModel_ ->
+                        routeFromPath model.routeParams protectedModel_ props.protectedPages
+                            |> Maybe.map
+                                (\r ->
+                                    ( h2
+                                        [ class "eadm eadm-page-title" ]
+                                        [ text (r.route.page.title r.routeParams r.model)
+                                        ]
+                                    , r.route.page.view model.formModel model.routeParams r.model
+                                    )
                                 )
-                            )
-                        |> Maybe.withDefault ( text "", text "" )
+                    )
+
+        ( activePageTitle, activePageView ) =
+            case protectedPage of
+                Just p ->
+                    p
 
                 Nothing ->
                     routeFromPath model.routeParams model.model props.pages
@@ -442,12 +448,13 @@ view props model =
                           else
                             text ""
                         ]
-                    , case protectedModel of
-                        Just protectedModel_ ->
-                            ElmAdmin.UI.Nav.view model.routeParams protectedModel_ props.protectedNavItems
-
-                        Nothing ->
-                            ElmAdmin.UI.Nav.view model.routeParams model.model props.navItems
+                    , ElmAdmin.UI.Nav.view model.routeParams model.model props.navItems
+                    , protectedModel
+                        |> Maybe.map
+                            (\protectedModel_ ->
+                                ElmAdmin.UI.Nav.view model.routeParams protectedModel_ props.protectedNavItems
+                            )
+                        |> Maybe.withDefault (text "")
                     ]
                 , main_ [ class "eadm eadm-main" ]
                     [ activePageTitle
