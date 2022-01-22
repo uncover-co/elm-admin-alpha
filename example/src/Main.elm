@@ -36,12 +36,9 @@ workspacesIndex =
         |> AP.view (\_ _ -> div [] [ text "Workspaces" ])
 
 
-createUser : AP.Page Model Msg String
+createUser : AP.Page Model Msg ()
 createUser =
     AP.page "Create User"
-        |> AP.params (Dict.get ":userId")
-        |> AP.view (\{ pathParams } _ -> div [] [ text pathParams ])
-        |> AP.view (\_ _ -> div [] [ text "Ha! Two views mofo" ])
         |> AP.form
             { init = \_ _ -> Just emptyUser
             , fields =
@@ -50,7 +47,6 @@ createUser =
                     |> AF.checkboxField "Admin" .isAdmin []
             , onSubmit = \_ model user -> ( { model | user = Just user }, SubCmd.none )
             }
-        |> AP.view (\_ _ -> div [] [ text "moooore!" ])
 
 
 main : ElmAdmin () Model Msg
@@ -68,6 +64,6 @@ main =
             , toModel = \_ model -> model
             }
             [ A.single "/workspaces/new" "Create" workspacesIndex
-            , A.single "/users/:userId" "User" createUser
+            , A.single "/users/new" "User" createUser
             ]
         ]

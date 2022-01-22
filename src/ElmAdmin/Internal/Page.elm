@@ -392,8 +392,6 @@ form props (Page p) =
                         props.init routeParams model
                             |> Maybe.map
                                 (\resource ->
-                                    -- TODO this needs access to the model
-                                    -- initing the fields should not be done through a cmd
                                     ( model
                                     , SubCmd.effect
                                         (ElmAdmin.Internal.Form.initFields resource props.fields
