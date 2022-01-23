@@ -1,5 +1,5 @@
 module ElmAdmin.Form exposing
-    ( fields, Fields, Field
+    ( form, Form, Field
     , textField, TextFieldOptions
     , checkboxField, CheckboxFieldOptions
     , rangeField, RangeFieldOptions
@@ -7,7 +7,7 @@ module ElmAdmin.Form exposing
 
 {-|
 
-@docs fields, Fields, Field
+@docs form, Form, Field
 
 @docs textField, TextFieldOptions
 
@@ -17,7 +17,7 @@ module ElmAdmin.Form exposing
 
 -}
 
-import ElmAdmin.Internal.Form exposing (Field(..), FieldValue(..), FieldsBuilder)
+import ElmAdmin.Internal.Form exposing (Field(..), FieldValue(..), FormBuilder)
 
 
 {-| -}
@@ -26,14 +26,14 @@ type alias Field resource =
 
 
 {-| -}
-type alias Fields resource =
-    ElmAdmin.Internal.Form.Fields resource
+type alias Form resource =
+    ElmAdmin.Internal.Form.Form resource
 
 
 {-| -}
-fields : a -> FieldsBuilder resource a
-fields =
-    ElmAdmin.Internal.Form.fields
+form : a -> FormBuilder resource a
+form =
+    ElmAdmin.Internal.Form.form
 
 
 
@@ -50,8 +50,8 @@ textField :
     String
     -> (resource -> String)
     -> List (TextFieldOptions -> TextFieldOptions)
-    -> FieldsBuilder resource (String -> a)
-    -> FieldsBuilder resource a
+    -> FormBuilder resource (String -> a)
+    -> FormBuilder resource a
 textField =
     ElmAdmin.Internal.Form.textField
 
@@ -71,8 +71,8 @@ checkboxField :
     String
     -> (resource -> Bool)
     -> List (CheckboxFieldOptions -> CheckboxFieldOptions)
-    -> FieldsBuilder resource (Bool -> a)
-    -> FieldsBuilder resource a
+    -> FormBuilder resource (Bool -> a)
+    -> FormBuilder resource a
 checkboxField =
     ElmAdmin.Internal.Form.checkboxField
 
@@ -95,7 +95,7 @@ rangeField :
     String
     -> (resource -> Float)
     -> List (RangeFieldOptions -> RangeFieldOptions)
-    -> FieldsBuilder resource (Float -> a)
-    -> FieldsBuilder resource a
+    -> FormBuilder resource (Float -> a)
+    -> FormBuilder resource a
 rangeField =
     ElmAdmin.Internal.Form.rangeField

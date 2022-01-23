@@ -1,31 +1,40 @@
 module ElmAdmin.Shared exposing
-    ( Effect(..)
+    ( Action
+    , Effect(..)
     , ElmAdmin
     , Model
     , Msg(..)
-    , SubCmd
     )
 
 import Browser exposing (UrlRequest)
 import Browser.Navigation
 import ElmAdmin.Internal.Form exposing (FieldValue, FormModel)
 import ElmAdmin.Router exposing (RouteParams)
+import ElmAdmin.UI.Notification exposing (NotificationStatus)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import SubCmd
+import Time exposing (Posix)
 import Url exposing (Url)
 
 
 type alias ElmAdmin flags model msg =
-    Program flags (Model model) (Msg msg)
+    Program flags (Model model msg) (Msg msg)
 
 
-type alias Model model =
+type alias Model model msg =
     { navKey : Browser.Navigation.Key
     , model : model
     , routeParams : RouteParams
     , darkMode : Bool
     , formModel : FormModel
+    , notification :
+        Maybe
+            { id : Int
+            , status : NotificationStatus
+            , content : Html msg
+            , expiration : Posix
+            }
     }
 
 
@@ -35,14 +44,17 @@ type Msg msg
     | OnUrlRequest UrlRequest
     | OnUrlChange Url
     | GotMsg msg
-    | GotEffect Effect
+    | GotEffect (Effect msg)
+    | HideNotification Posix
+    | SetNotificationExpiration Posix
     | SubmitForm
     | UpdateFormField String FieldValue
 
 
-type Effect
-    = SetFormModel FormModel
+type Effect msg
+    = UpdateFormModel (FormModel -> FormModel)
+    | ShowNotification NotificationStatus (Html msg)
 
 
-type alias SubCmd msg =
-    SubCmd.SubCmd msg Effect
+type alias Action msg =
+    SubCmd.SubCmd msg (Effect msg)

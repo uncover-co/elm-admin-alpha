@@ -1,5 +1,5 @@
 module ElmAdmin exposing
-    ( admin, pages, protectedPages, update, updateWithEffect, subscriptions, theme, ElmAdmin
+    ( admin, pages, protectedPages, update, subscriptions, theme, ElmAdmin
     , single, url, external, group, visualGroup, folderGroup, NavigationItem
     , hidden, disabled, Options
     , RouteParams
@@ -11,7 +11,7 @@ module ElmAdmin exposing
 
 # Setup
 
-@docs admin, pages, protectedPages, update, updateWithEffect, subscriptions, theme, ElmAdmin
+@docs admin, pages, protectedPages, update, subscriptions, theme, ElmAdmin
 
 
 # Navigation
@@ -39,10 +39,9 @@ import Browser
 import Browser.Navigation exposing (..)
 import Dict exposing (Dict)
 import ElmAdmin.Application
-import ElmAdmin.Internal.Form
 import ElmAdmin.Internal.Page exposing (Page, Route)
 import ElmAdmin.Router
-import ElmAdmin.Shared exposing (Effect(..), Msg(..), SubCmd)
+import ElmAdmin.Shared exposing (Action, Effect(..), Msg(..))
 import ElmAdmin.UI.Invalid
 import ElmAdmin.UI.Nav
 import Html exposing (..)
@@ -507,8 +506,8 @@ type Options flags model protectedModel msg
 
 type alias OptionsData flags model protectedModel msg =
     { theme : ThemeOptions
-    , init : Maybe (flags -> Browser.Navigation.Key -> ( model, SubCmd msg ))
-    , update : RouteParams -> msg -> model -> ( model, SubCmd msg )
+    , init : Maybe (flags -> Browser.Navigation.Key -> ( model, Action msg ))
+    , update : RouteParams -> msg -> model -> ( model, Action msg )
     , subscriptions : RouteParams -> model -> Sub msg
     , pages : List (NavigationItem model msg)
     , protectedPages : List (NavigationItem protectedModel msg)
@@ -532,21 +531,14 @@ defaultOptions =
 
 
 {-| -}
-update : (RouteParams -> msg -> model -> ( model, Cmd msg )) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
+update : (RouteParams -> msg -> model -> ( model, Action msg )) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
 update update_ (Options options) =
     Options
         { options
             | update =
                 \routeParams msg model ->
                     update_ routeParams msg model
-                        |> Tuple.mapSecond SubCmd.cmd
         }
-
-
-{-| -}
-updateWithEffect : (RouteParams -> msg -> model -> ( model, SubCmd msg )) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
-updateWithEffect update_ (Options options) =
-    Options { options | update = update_ }
 
 
 {-| -}
@@ -607,7 +599,7 @@ protectedPages { fromModel, toModel } protectedPages_ (Options options) =
 
 -}
 admin :
-    { title : String, init : flags -> Browser.Navigation.Key -> ( model, Cmd msg ) }
+    { title : String, init : flags -> Browser.Navigation.Key -> ( model, Action msg ) }
     -> List (Options flags model protectedModel msg -> Options flags model protectedModel msg)
     -> ElmAdmin flags model msg
 admin props options_ =
@@ -824,16 +816,7 @@ admin props options_ =
             Browser.application
                 { onUrlChange = OnUrlChange
                 , onUrlRequest = OnUrlRequest
-                , init =
-                    \flags _ key ->
-                        ( { navKey = key
-                          , model = props.init flags key |> Tuple.first
-                          , routeParams = ElmAdmin.Router.emptyRouteParams
-                          , darkMode = True
-                          , formModel = ElmAdmin.Internal.Form.empty
-                          }
-                        , Cmd.none
-                        )
+                , init = ElmAdmin.Application.initError props.init
                 , update = \_ model -> ( model, Cmd.none )
                 , subscriptions = \_ -> Sub.none
                 , view =

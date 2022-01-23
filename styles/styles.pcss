@@ -6,6 +6,25 @@
   padding: 0;
 }
 
+/**
+ * Animations
+ */
+
+@keyframes eadm-fade-slide {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.eadm.eadm-fade-slide {
+  animation: eadm-fade-slide 400ms;
+}
+
 /* Helpers */
 
 .eadm.eadm-link {
@@ -152,6 +171,39 @@
   padding-bottom: 20px;
 }
 
+/* Notification */
+
+.eadm.eadm-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px;
+  width: 100%;
+  max-width: 280px;
+  box-shadow: 0 1px 8px var(--tmspc-background-shadow);
+  background: var(--tmspc-background-base);
+  border-radius: var(--tmspc-border-radius);
+  border-top: var(--tmspc-border-radius) solid var(--tmspc-color-dark);
+
+  &.eadm-m-highlight {
+    border-top-color: var(--tmspc-highlight-base);
+  }
+  &.eadm-m-success {
+    border-top-color: var(--tmspc-success-base);
+  }
+  &.eadm-m-warning {
+    border-top-color: var(--tmspc-warning-base);
+  }
+  &.eadm-m-danger {
+    border-top-color: var(--tmspc-danger-base);
+  }
+}
+.eadm.eadm-notification-content {
+  font-size: 14px;
+  font-family: var(--tmspc-font-text);
+  color: var(--tmspc-color-base);
+}
+
 /* Card */
 
 .eadm.eadm-card {
@@ -159,6 +211,7 @@
   background: var(--tmspc-background-base);
   border-radius: 8px;
   overflow: hidden;
+  box-shadow: 0 0 8px var(--tmspc-background-shadow);
 }
 
 /* Form */

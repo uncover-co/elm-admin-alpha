@@ -1,5 +1,6 @@
 module ElmAdmin.Application exposing
     ( init
+    , initError
     , subscriptions
     , update
     , view
@@ -11,15 +12,19 @@ import Dict exposing (Dict)
 import ElmAdmin.Internal.Form
 import ElmAdmin.Internal.Page exposing (Route)
 import ElmAdmin.Router exposing (RouteParams)
-import ElmAdmin.Shared exposing (Effect(..), Model, Msg(..), SubCmd)
+import ElmAdmin.Shared exposing (Action, Effect(..), Model, Msg(..))
 import ElmAdmin.Styles
 import ElmAdmin.UI.Nav exposing (UINavItem)
+import ElmAdmin.UI.Notification
 import ElmWidgets
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events as HE
+import Html.Keyed
 import SubModule
+import Task
 import ThemeSpec
+import Time
 import Url exposing (Url)
 
 
@@ -94,7 +99,7 @@ routeInitFromUrl :
         Maybe
             { model : model
             , routeParams : RouteParams
-            , initCmd : ( Model model, Cmd (Msg msg) ) -> ( Model model, Cmd (Msg msg) )
+            , initCmd : ( Model model msg, Cmd (Msg msg) ) -> ( Model model msg, Cmd (Msg msg) )
             }
 routeInitFromUrl props =
     let
@@ -138,7 +143,7 @@ routeInitFromUrl props =
 
 
 init :
-    { init : flags -> Browser.Navigation.Key -> ( model, Cmd msg )
+    { init : flags -> Browser.Navigation.Key -> ( model, Action msg )
     , pageRoutes : Dict String (List (Route model msg))
     , protectedPageRoutes : Dict String (List (Route protectedModel msg))
     , protectedModel : model -> Maybe protectedModel
@@ -148,11 +153,18 @@ init :
     -> flags
     -> Url
     -> Browser.Navigation.Key
-    -> ( Model model, Cmd (Msg msg) )
+    -> ( Model model msg, Cmd (Msg msg) )
 init props flags url navKey =
     let
+        initialFormModel =
+            ElmAdmin.Internal.Form.empty
+
         ( initialModel, initialCmd ) =
             props.init flags navKey
+                |> SubModule.initWithEffect
+                    { toMsg = GotMsg
+                    , effectToMsg = GotEffect
+                    }
     in
     case
         routeInitFromUrl
@@ -167,34 +179,50 @@ init props flags url navKey =
         Just routeInit ->
             ( { navKey = navKey
               , model = routeInit.model
-              , formModel = ElmAdmin.Internal.Form.empty
+              , formModel = initialFormModel
               , routeParams = routeInit.routeParams
+              , notification = Nothing
               , darkMode = props.preferDarkMode
               }
-            , Cmd.map GotMsg initialCmd
+            , Cmd.none
             )
                 |> routeInit.initCmd
+                |> initialCmd
 
         Nothing ->
             ( { navKey = navKey
               , model = initialModel
-              , formModel = ElmAdmin.Internal.Form.empty
+              , formModel = initialFormModel
               , routeParams = ElmAdmin.Router.emptyRouteParams
+              , notification = Nothing
               , darkMode = props.preferDarkMode
               }
             , Cmd.batch
-                [ Cmd.map GotMsg initialCmd
-                , if url.path /= "/" then
+                [ if url.path /= "/" then
                     Browser.Navigation.replaceUrl navKey "/"
 
                   else
                     Cmd.none
                 ]
             )
+                |> initialCmd
+
+
+initError : (flags -> Browser.Navigation.Key -> ( model, Action msg )) -> flags -> Url -> Browser.Navigation.Key -> ( Model model msg, Cmd (Msg msg) )
+initError initModel flags _ key =
+    ( { navKey = key
+      , model = initModel flags key |> Tuple.first
+      , routeParams = ElmAdmin.Router.emptyRouteParams
+      , notification = Nothing
+      , darkMode = True
+      , formModel = ElmAdmin.Internal.Form.empty
+      }
+    , Cmd.none
+    )
 
 
 update :
-    { update : RouteParams -> msg -> model -> ( model, SubCmd msg )
+    { update : RouteParams -> msg -> model -> ( model, Action msg )
     , pages : Dict String (Route model msg)
     , protectedPages : Dict String (Route protectedModel msg)
     , pageRoutes : Dict String (List (Route model msg))
@@ -203,8 +231,8 @@ update :
     , protectedToModel : model -> protectedModel -> model
     }
     -> Msg msg
-    -> Model model
-    -> ( Model model, Cmd (Msg msg) )
+    -> Model model msg
+    -> ( Model model msg, Cmd (Msg msg) )
 update props msg model =
     case msg of
         DoNothing ->
@@ -258,6 +286,28 @@ update props msg model =
                         Cmd.none
                     )
 
+        HideNotification posix ->
+            case model.notification of
+                Just notification ->
+                    if Time.posixToMillis notification.expiration < Time.posixToMillis posix then
+                        ( { model | notification = Nothing }, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SetNotificationExpiration posix ->
+            ( { model
+                | notification =
+                    model.notification
+                        |> Maybe.map
+                            (\notification -> { notification | expiration = posix })
+              }
+            , Cmd.none
+            )
+
         GotMsg msg_ ->
             let
                 ( model_, cmd ) =
@@ -307,11 +357,70 @@ update props msg model =
 
         GotEffect effect ->
             case effect of
-                SetFormModel formModel ->
-                    ( { model | formModel = formModel }, Cmd.none )
+                UpdateFormModel fn ->
+                    ( { model | formModel = fn model.formModel }, Cmd.none )
+
+                ShowNotification status content ->
+                    ( { model
+                        | notification =
+                            let
+                                id_ =
+                                    case model.notification of
+                                        Just { id } ->
+                                            id + 1
+
+                                        Nothing ->
+                                            0
+                            in
+                            Just
+                                { id = id_
+                                , status = status
+                                , content = content
+                                , expiration = Time.millisToPosix 0
+                                }
+                      }
+                    , Task.perform
+                        (\posix ->
+                            posix
+                                |> Time.posixToMillis
+                                |> (+) 3000
+                                |> Time.millisToPosix
+                                |> SetNotificationExpiration
+                        )
+                        Time.now
+                    )
 
         SubmitForm ->
-            ( model, Cmd.none )
+            let
+                routeStuff =
+                    case props.protectedModel model.model of
+                        Just protectedModel_ ->
+                            routeFromPath model.routeParams protectedModel_ props.protectedPages
+                                |> Maybe.map
+                                    (\r ->
+                                        r.route.page.update model.formModel r.routeParams msg r.model
+                                            |> SubModule.updateWithEffect
+                                                { toModel = props.protectedToModel model.model
+                                                , toMsg = GotMsg
+                                                , effectToMsg = GotEffect
+                                                }
+                                    )
+
+                        Nothing ->
+                            routeFromPath model.routeParams model.model props.pages
+                                |> Maybe.map
+                                    (\r ->
+                                        r.route.page.update model.formModel r.routeParams msg r.model
+                                            |> SubModule.updateWithEffect
+                                                { toModel = identity
+                                                , toMsg = GotMsg
+                                                , effectToMsg = GotEffect
+                                                }
+                                    )
+            in
+            routeStuff
+                |> Maybe.map (Tuple.mapFirst (\m -> { model | model = m }))
+                |> Maybe.withDefault ( model, Cmd.none )
 
         UpdateFormField k v ->
             let
@@ -335,7 +444,7 @@ subscriptions :
     , protectedModel : model -> Maybe protectedModel
     , protectedToModel : model -> protectedModel -> model
     }
-    -> Model model
+    -> Model model msg
     -> Sub (Msg msg)
 subscriptions props model =
     let
@@ -352,10 +461,18 @@ subscriptions props model =
                         |> Maybe.andThen (validateEnabled model.routeParams model.model)
                         |> Maybe.map (\r -> r.route.page.subscriptions model.routeParams model.model)
                         |> Maybe.withDefault Sub.none
+
+        notificationSubscriptions =
+            if model.notification /= Nothing then
+                Time.every 1000 HideNotification
+
+            else
+                Sub.none
     in
     Sub.batch
         [ props.subscriptions model.routeParams model.model |> Sub.map GotMsg
         , activePageSubscriptions
+        , notificationSubscriptions
         ]
 
 
@@ -374,7 +491,7 @@ view :
         , disableModeSwitch : Bool
         }
     }
-    -> Model model
+    -> Model model msg
     -> Browser.Document (Msg msg)
 view props model =
     let
@@ -433,7 +550,22 @@ view props model =
         , ElmWidgets.globalStyles
         , ElmAdmin.Styles.globalStyles
         , div [ classList [ ( "eadm-dark", model.darkMode ) ] ]
-            [ div [ class "eadm eadm-wrapper" ]
+            [ case model.notification of
+                Just notification ->
+                    Html.Keyed.node "div"
+                        []
+                        [ ( String.fromInt notification.id
+                          , ElmAdmin.UI.Notification.view
+                                { status = notification.status
+                                , content = notification.content
+                                }
+                                |> Html.map GotMsg
+                          )
+                        ]
+
+                Nothing ->
+                    text ""
+            , div [ class "eadm eadm-wrapper" ]
                 [ aside [ class "eadm eadm-sidebar" ]
                     [ header [ class "eadm eadm-sidebar-header" ]
                         [ h1 [ class "eadm eadm-title" ]

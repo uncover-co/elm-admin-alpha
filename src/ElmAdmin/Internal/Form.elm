@@ -1,23 +1,24 @@
 module ElmAdmin.Internal.Form exposing
     ( Field(..)
     , FieldValue(..)
-    , Fields
-    , FieldsBuilder
+    , Form
+    , FormBuilder
     , FormModel
     , TextFieldOptions
     , checkboxField
     , empty
-    , fields
+    , form
     , initFields
     , rangeField
     , textField
     )
 
 import Dict exposing (Dict)
+import Set exposing (Set)
 
 
 type alias FormModel =
-    { initialized : Bool
+    { initialized : Set String
     , values : Dict String FieldValue
     }
 
@@ -28,26 +29,29 @@ type FieldValue
     | FieldValueBool Bool
 
 
-type alias Fields r =
-    FieldsBuilder r r
+type alias Form r =
+    FormBuilder r r
 
 
-type alias FieldsBuilder resource a =
-    { fields : List ( String, Field resource )
+type alias FormBuilder resource a =
+    { id : String
+    , fields : List ( String, Field resource )
     , resolver : FormModel -> Maybe a
     }
 
 
-fields : a -> FieldsBuilder resource a
-fields a =
-    { fields = []
+form : a -> FormBuilder resource a
+form a =
+    { id = ""
+    , fields = []
     , resolver = \_ -> Just a
     }
 
 
-initFields : resource -> Fields resource -> FormModel
-initFields resource form_ =
-    { initialized = True
+initFields : resource -> Form resource -> FormModel -> FormModel
+initFields resource form_ formModel =
+    { initialized =
+        Set.insert form_.id formModel.initialized
     , values =
         form_.fields
             |> List.map
@@ -70,7 +74,7 @@ initFields resource form_ =
 
 empty : FormModel
 empty =
-    { initialized = False
+    { initialized = Set.empty
     , values = Dict.empty
     }
 
@@ -109,14 +113,15 @@ textField :
     String
     -> (resource -> String)
     -> List (TextFieldOptions -> TextFieldOptions)
-    -> FieldsBuilder resource (String -> a)
-    -> FieldsBuilder resource a
+    -> FormBuilder resource (String -> a)
+    -> FormBuilder resource a
 textField label fromResource options_ f =
     let
         options =
             List.foldl (\fn a -> fn a) textFieldDefaults options_
     in
-    { fields =
+    { id = label ++ f.id
+    , fields =
         ( label
         , TextField
             { fromResource = fromResource
@@ -158,14 +163,15 @@ checkboxField :
     String
     -> (resource -> Bool)
     -> List (CheckboxOptions -> CheckboxOptions)
-    -> FieldsBuilder resource (Bool -> a)
-    -> FieldsBuilder resource a
+    -> FormBuilder resource (Bool -> a)
+    -> FormBuilder resource a
 checkboxField label fromResource options_ f =
     let
         options =
             List.foldl (\fn a -> fn a) checkboxFieldDefaults options_
     in
-    { fields =
+    { id = label ++ f.id
+    , fields =
         ( label
         , CheckboxField
             { fromResource = fromResource
@@ -213,14 +219,15 @@ rangeField :
     String
     -> (resource -> Float)
     -> List (RangeFieldOptions -> RangeFieldOptions)
-    -> FieldsBuilder resource (Float -> a)
-    -> FieldsBuilder resource a
+    -> FormBuilder resource (Float -> a)
+    -> FormBuilder resource a
 rangeField label fromResource options_ f =
     let
         options =
             List.foldl (\fn a -> fn a) rangeFieldDefaults options_
     in
-    { fields =
+    { id = label ++ f.id
+    , fields =
         ( label
         , RangeField
             { fromResource = fromResource

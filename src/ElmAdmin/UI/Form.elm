@@ -1,18 +1,19 @@
 module ElmAdmin.UI.Form exposing (..)
 
 import Dict
-import ElmAdmin.Internal.Form exposing (Field(..), FieldValue(..), Fields, FormModel)
+import ElmAdmin.Internal.Form exposing (Field(..), FieldValue(..), Form, FormModel)
 import ElmAdmin.Shared exposing (Msg(..))
 import ElmWidgets as W
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Html.Events exposing (onSubmit)
 
 
-view : FormModel -> Fields resource -> Html (Msg msg)
-view formModel fields =
-    Html.article [ class "eadm eadm-card" ]
+view : FormModel -> Form resource -> Html (Msg msg)
+view formModel form =
+    Html.form [ class "eadm eadm-card", onSubmit SubmitForm ]
         [ ul [ class "eadm eadm-form-fields" ]
-            (fields.fields
+            (form.fields
                 |> List.map
                     (\( label, field ) ->
                         case ( field, Dict.get label formModel.values ) of
@@ -48,7 +49,7 @@ view formModel fields =
             [ div [ class "eadm eadm-form-footer-inner" ]
                 [ W.primaryButton []
                     { label = text "Confirm"
-                    , onClick = SubmitForm
+                    , onClick = DoNothing
                     }
                 ]
             ]

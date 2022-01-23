@@ -2,7 +2,6 @@ module ElmAdmin.Page exposing
     ( page, params, title, nav, Page
     , init, update, view, subscriptions
     , form
-    , initWithEffect, updateWithEffect
     )
 
 {-|
@@ -22,17 +21,12 @@ module ElmAdmin.Page exposing
 
 @docs form
 
-
-## Effects
-
-@docs initWithEffect, updateWithEffect
-
 -}
 
 import Dict exposing (Dict)
 import ElmAdmin.Form
 import ElmAdmin.Internal.Page exposing (PageRouteParams)
-import ElmAdmin.Shared exposing (Effect(..), Msg(..), SubCmd)
+import ElmAdmin.Shared exposing (Action, Effect(..), Msg(..))
 import Html exposing (Html)
 
 
@@ -76,7 +70,7 @@ title =
 
 {-| -}
 init :
-    (PageRouteParams params -> model -> ( model, Cmd msg ))
+    (PageRouteParams params -> model -> ( model, Action msg ))
     -> Page model msg params
     -> Page model msg params
 init =
@@ -84,21 +78,9 @@ init =
 
 
 {-| -}
-initWithEffect : (PageRouteParams params -> model -> ( model, SubCmd msg )) -> Page model msg params -> Page model msg params
-initWithEffect =
-    ElmAdmin.Internal.Page.initWithEffect
-
-
-{-| -}
-update : (PageRouteParams params -> Msg msg -> model -> ( model, Cmd msg )) -> Page model msg params -> Page model msg params
+update : (PageRouteParams params -> Msg msg -> model -> ( model, Action msg )) -> Page model msg params -> Page model msg params
 update =
     ElmAdmin.Internal.Page.update
-
-
-{-| -}
-updateWithEffect : (PageRouteParams params -> Msg msg -> model -> ( model, SubCmd msg )) -> Page model msg params -> Page model msg params
-updateWithEffect =
-    ElmAdmin.Internal.Page.updateWithEffect
 
 
 {-| -}
@@ -116,8 +98,8 @@ view =
 {-| -}
 form :
     { init : PageRouteParams params -> model -> Maybe resource
-    , fields : ElmAdmin.Form.Fields resource
-    , onSubmit : PageRouteParams params -> model -> resource -> ( model, SubCmd msg )
+    , form : ElmAdmin.Form.Form resource
+    , onSubmit : PageRouteParams params -> model -> resource -> ( model, Action msg )
     }
     -> Page model msg params
     -> Page model msg params

@@ -5,7 +5,6 @@ module ElmAdmin.Internal.Page exposing
     , Route
     , form
     , init
-    , initWithEffect
     , nav
     , page
     , params
@@ -14,17 +13,18 @@ module ElmAdmin.Internal.Page exposing
     , title
     , toTitle
     , update
-    , updateWithEffect
     , view
     )
 
 import Dict exposing (Dict)
 import ElmAdmin.Internal.Form exposing (FormModel)
 import ElmAdmin.Router exposing (RouteParams, pathFromString)
-import ElmAdmin.Shared exposing (Effect(..), Msg(..), SubCmd)
+import ElmAdmin.Shared exposing (Action, Effect(..), Msg(..))
 import ElmAdmin.UI.Form
 import Html as H exposing (Html)
+import Set
 import SubCmd
+import Time exposing (Month(..))
 
 
 
@@ -43,8 +43,8 @@ type alias Route model msg =
 type alias PageData model msg =
     { nav : Maybe (RouteParams -> model -> String)
     , title : RouteParams -> model -> String
-    , init : RouteParams -> model -> ( model, SubCmd msg )
-    , update : FormModel -> RouteParams -> Msg msg -> model -> ( model, SubCmd msg )
+    , init : RouteParams -> model -> ( model, Action msg )
+    , update : FormModel -> RouteParams -> Msg msg -> model -> ( model, Action msg )
     , subscriptions : RouteParams -> model -> Sub (Msg msg)
     , view : FormModel -> RouteParams -> model -> Html (Msg msg)
     }
@@ -66,8 +66,8 @@ type Page model msg params
         , page :
             { nav : Maybe (PageRouteParams params -> model -> String)
             , title : PageRouteParams params -> model -> String
-            , init : PageRouteParams params -> model -> ( model, SubCmd msg )
-            , update : FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, SubCmd msg )
+            , init : PageRouteParams params -> model -> ( model, Action msg )
+            , update : FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, Action msg )
             , subscriptions : PageRouteParams params -> model -> Sub (Msg msg)
             , view : FormModel -> PageRouteParams params -> model -> Html (Msg msg)
             }
@@ -251,7 +251,7 @@ title title_ (Page p) =
 
 
 init :
-    (PageRouteParams params -> model -> ( model, Cmd msg ))
+    (PageRouteParams params -> model -> ( model, Action msg ))
     -> Page model msg params
     -> Page model msg params
 init init_ (Page p) =
@@ -263,45 +263,13 @@ init init_ (Page p) =
             withInit p.page.init
                 (\routeParams model ->
                     init_ routeParams model
-                        |> Tuple.mapSecond SubCmd.cmd
                 )
     in
     Page { p | page = { page_ | init = init__ } }
 
 
-initWithEffect : (PageRouteParams params -> model -> ( model, SubCmd msg )) -> Page model msg params -> Page model msg params
-initWithEffect init_ (Page p) =
-    let
-        page_ =
-            p.page
-
-        init__ =
-            withInit p.page.init
-                (\routeParams model ->
-                    init_ routeParams model
-                )
-    in
-    Page { p | page = { page_ | init = init__ } }
-
-
-update : (PageRouteParams params -> Msg msg -> model -> ( model, Cmd msg )) -> Page model msg params -> Page model msg params
+update : (PageRouteParams params -> Msg msg -> model -> ( model, Action msg )) -> Page model msg params -> Page model msg params
 update update_ (Page p) =
-    let
-        page_ =
-            p.page
-
-        update__ =
-            withUpdate p.page.update
-                (\_ routeParams msg model ->
-                    update_ routeParams msg model
-                        |> Tuple.mapSecond SubCmd.cmd
-                )
-    in
-    Page { p | page = { page_ | update = update__ } }
-
-
-updateWithEffect : (PageRouteParams params -> Msg msg -> model -> ( model, SubCmd msg )) -> Page model msg params -> Page model msg params
-updateWithEffect update_ (Page p) =
     let
         page_ =
             p.page
@@ -349,8 +317,8 @@ view view_ (Page p) =
 
 form :
     { init : PageRouteParams params -> model -> Maybe resource
-    , fields : ElmAdmin.Internal.Form.Fields resource
-    , onSubmit : PageRouteParams params -> model -> resource -> ( model, SubCmd msg )
+    , form : ElmAdmin.Internal.Form.Form resource
+    , onSubmit : PageRouteParams params -> model -> resource -> ( model, Action msg )
     }
     -> Page model msg params
     -> Page model msg params
@@ -367,8 +335,8 @@ form props (Page p) =
                             (\resource ->
                                 ( model
                                 , SubCmd.effect
-                                    (ElmAdmin.Internal.Form.initFields resource props.fields
-                                        |> SetFormModel
+                                    (ElmAdmin.Internal.Form.initFields resource props.form
+                                        |> UpdateFormModel
                                     )
                                 )
                             )
@@ -378,10 +346,10 @@ form props (Page p) =
         update_ =
             withUpdate p.page.update
                 (\formModel routeParams msg model ->
-                    if formModel.initialized then
+                    if Set.member props.form.id formModel.initialized then
                         case msg of
                             SubmitForm ->
-                                props.fields.resolver formModel
+                                props.form.resolver formModel
                                     |> Maybe.map (props.onSubmit routeParams model)
                                     |> Maybe.withDefault ( model, SubCmd.none )
 
@@ -394,8 +362,8 @@ form props (Page p) =
                                 (\resource ->
                                     ( model
                                     , SubCmd.effect
-                                        (ElmAdmin.Internal.Form.initFields resource props.fields
-                                            |> SetFormModel
+                                        (ElmAdmin.Internal.Form.initFields resource props.form
+                                            |> UpdateFormModel
                                         )
                                     )
                                 )
@@ -405,10 +373,10 @@ form props (Page p) =
         view_ =
             withView p.page.view
                 (\formModel _ _ ->
-                    if formModel.initialized then
+                    if Set.member props.form.id formModel.initialized then
                         ElmAdmin.UI.Form.view
                             formModel
-                            props.fields
+                            props.form
 
                     else
                         H.div [] [ H.text "Loading…" ]
@@ -430,11 +398,11 @@ form props (Page p) =
 
 
 withInit :
-    (PageRouteParams params -> model -> ( model, SubCmd msg ))
-    -> (PageRouteParams params -> model -> ( model, SubCmd msg ))
+    (PageRouteParams params -> model -> ( model, Action msg ))
+    -> (PageRouteParams params -> model -> ( model, Action msg ))
     -> PageRouteParams params
     -> model
-    -> ( model, SubCmd msg )
+    -> ( model, Action msg )
 withInit before after routeParams model =
     before routeParams model
         |> (\( model_, cmd ) ->
@@ -444,13 +412,13 @@ withInit before after routeParams model =
 
 
 withUpdate :
-    (FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, SubCmd msg ))
-    -> (FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, SubCmd msg ))
+    (FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, Action msg ))
+    -> (FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, Action msg ))
     -> FormModel
     -> PageRouteParams params
     -> Msg msg
     -> model
-    -> ( model, SubCmd msg )
+    -> ( model, Action msg )
 withUpdate before after formModel routeParams msg model =
     before formModel routeParams msg model
         |> (\( model_, cmd ) ->
