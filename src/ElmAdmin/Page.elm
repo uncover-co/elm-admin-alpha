@@ -1,8 +1,7 @@
 module ElmAdmin.Page exposing
     ( page, params, title, nav, Page
     , init, update, view, subscriptions
-    , form
-    , list
+    , form, list
     )
 
 {-|
@@ -20,7 +19,7 @@ module ElmAdmin.Page exposing
 
 ## Especial Views
 
-@docs form
+@docs form, list
 
 -}
 
