@@ -5,6 +5,7 @@ module ElmAdmin.Internal.Page exposing
     , Route
     , form
     , init
+    , list
     , nav
     , page
     , params
@@ -21,7 +22,9 @@ import ElmAdmin.Internal.Form exposing (FormModel)
 import ElmAdmin.Router exposing (RouteParams, pathFromString)
 import ElmAdmin.Shared exposing (Action, Effect(..), Msg(..))
 import ElmAdmin.UI.Form
+import ElmAdmin.UI.List
 import Html as H exposing (Html)
+import Html.Attributes as HA
 import Set
 import SubCmd
 import Time exposing (Month(..))
@@ -346,7 +349,7 @@ form props (Page p) =
         update_ =
             withUpdate p.page.update
                 (\formModel routeParams msg model ->
-                    if Set.member props.form.id formModel.initialized then
+                    if Set.member props.form.title formModel.initialized then
                         case msg of
                             SubmitForm ->
                                 props.form.resolver formModel
@@ -373,13 +376,13 @@ form props (Page p) =
         view_ =
             withView p.page.view
                 (\formModel _ _ ->
-                    if Set.member props.form.id formModel.initialized then
+                    if Set.member props.form.title formModel.initialized then
                         ElmAdmin.UI.Form.view
                             formModel
                             props.form
 
                     else
-                        H.div [] [ H.text "Loading…" ]
+                        ElmAdmin.UI.Form.viewLoading props.form
                 )
     in
     Page
@@ -391,6 +394,32 @@ form props (Page p) =
                     , view = view_
                 }
         }
+
+
+list :
+    { title : Html msg
+    , init : PageRouteParams params -> model -> Maybe (List a)
+    , toItem : model -> a -> { label : Html msg, actions : Html msg }
+    }
+    -> Page model msg params
+    -> Page model msg params
+list props (Page p) =
+    let
+        page_ =
+            p.page
+
+        view_ =
+            withView p.page.view
+                (\_ routeParams model ->
+                    ElmAdmin.UI.List.view
+                        { title = props.title
+                        , items =
+                            props.init routeParams model
+                                |> Maybe.map (List.map (props.toItem model))
+                        }
+                )
+    in
+    Page { p | page = { page_ | view = view_ } }
 
 
 
@@ -450,5 +479,7 @@ withView :
 withView before after formData routeParams model =
     H.div []
         [ before formData routeParams model
-        , after formData routeParams model
+        , H.div [ HA.class "eadm eadm-view" ]
+            [ after formData routeParams model
+            ]
         ]

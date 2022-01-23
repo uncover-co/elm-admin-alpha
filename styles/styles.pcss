@@ -204,6 +204,12 @@
   color: var(--tmspc-color-base);
 }
 
+/* View */
+
+.eadm.eadm-view {
+  padding-bottom: 20px;
+}
+
 /* Card */
 
 .eadm.eadm-card {
@@ -214,8 +220,66 @@
   box-shadow: 0 0 8px var(--tmspc-background-shadow);
 }
 
+/* Loading */
+
+.eadm.eadm-loading {
+  max-height: 100%;
+  max-width: 100%;
+}
+
+/* List */
+
+.eadm.eadm-list-title {
+  padding: 12px 16px;
+  border-bottom: 2px solid var(--tmspc-background-tint);
+  text-transform: uppercase;
+  font-weight: 500;
+  font-family: var(--tmspc-font-title);
+  font-size: 12px;
+  line-height: 1em;
+  letter-spacing: 0.5px;
+  color: var(--tmspc-color-light);
+}
+.eadm.eadm-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  min-height: 48px;
+  padding: 12px 16px;
+
+  font-family: var(--tmspc-font-text);
+  font-size: 16px;
+  color: var(--tmspc-color-base);
+}
+.eadm.eadm-list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 48px;
+  padding: 4px;
+
+  line-height: 2px;
+  text-align: center;
+  font-weight: bold;
+  font-size: 24px;
+  color: var(--tmspc-background-dark);
+}
+
 /* Form */
 
+.eadm.eadm-form-title {
+  padding: 12px 16px;
+  border-bottom: 2px solid var(--tmspc-background-tint);
+  text-transform: uppercase;
+  font-weight: 500;
+  font-family: var(--tmspc-font-title);
+  font-size: 12px;
+  line-height: 1em;
+  letter-spacing: 0.5px;
+  color: var(--tmspc-color-light);
+}
 .eadm.eadm-form-fields {
   list-style-type: none;
 }
@@ -224,5 +288,11 @@
 }
 .eadm.eadm-form-footer-inner {
   border-top: 2px solid var(--tmspc-background-tint);
-  padding: 12px 8px;
+  padding: 12px 16px;
+}
+.eadm.eadm-form-loading {
+  display: flex;
+  justify-content: center;
+  height: 48px;
+  padding: 4px;
 }

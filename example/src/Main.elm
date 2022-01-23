@@ -1,14 +1,11 @@
 module Main exposing (main)
 
-import Dict
 import ElmAdmin as A exposing (ElmAdmin, admin)
 import ElmAdmin.Actions as AA
 import ElmAdmin.Form as AF
 import ElmAdmin.Page as AP
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import SubCmd
-import Task
 import ThemeSpec
 
 
@@ -43,7 +40,7 @@ workspacesIndex =
 
 createUserForm : AF.Form User
 createUserForm =
-    AF.form User
+    AF.form "Create User" User
         |> AF.textField "Name" .name []
         |> AF.checkboxField "Admin" .isAdmin []
 
@@ -61,18 +58,11 @@ createUser =
                     , AA.initForm createUserForm emptyUser
                     )
             }
-        |> AP.view
-            (\_ model ->
-                case model.users of
-                    [] ->
-                        div [ style "color" ThemeSpec.color ] [ text "No users created." ]
-
-                    _ ->
-                        div []
-                            (model.users
-                                |> List.map (\user -> div [ style "color" ThemeSpec.color ] [ text user.name ])
-                            )
-            )
+        |> AP.list
+            { title = text "All Users"
+            , init = \_ model -> Nothing
+            , toItem = \_ user -> { label = text user.name, actions = text "" }
+            }
 
 
 main : ElmAdmin () Model Msg

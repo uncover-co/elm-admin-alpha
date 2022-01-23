@@ -34,15 +34,15 @@ type alias Form r =
 
 
 type alias FormBuilder resource a =
-    { id : String
+    { title : String
     , fields : List ( String, Field resource )
     , resolver : FormModel -> Maybe a
     }
 
 
-form : a -> FormBuilder resource a
-form a =
-    { id = ""
+form : String -> a -> FormBuilder resource a
+form title a =
+    { title = title
     , fields = []
     , resolver = \_ -> Just a
     }
@@ -51,7 +51,7 @@ form a =
 initFields : resource -> Form resource -> FormModel -> FormModel
 initFields resource form_ formModel =
     { initialized =
-        Set.insert form_.id formModel.initialized
+        Set.insert form_.title formModel.initialized
     , values =
         form_.fields
             |> List.map
@@ -120,7 +120,7 @@ textField label fromResource options_ f =
         options =
             List.foldl (\fn a -> fn a) textFieldDefaults options_
     in
-    { id = label ++ f.id
+    { title = f.title
     , fields =
         ( label
         , TextField
@@ -170,7 +170,7 @@ checkboxField label fromResource options_ f =
         options =
             List.foldl (\fn a -> fn a) checkboxFieldDefaults options_
     in
-    { id = label ++ f.id
+    { title = f.title
     , fields =
         ( label
         , CheckboxField
@@ -226,7 +226,7 @@ rangeField label fromResource options_ f =
         options =
             List.foldl (\fn a -> fn a) rangeFieldDefaults options_
     in
-    { id = label ++ f.id
+    { title = f.title
     , fields =
         ( label
         , RangeField

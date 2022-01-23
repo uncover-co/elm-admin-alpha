@@ -2,6 +2,7 @@ module ElmAdmin.Page exposing
     ( page, params, title, nav, Page
     , init, update, view, subscriptions
     , form
+    , list
     )
 
 {-|
@@ -105,3 +106,15 @@ form :
     -> Page model msg params
 form =
     ElmAdmin.Internal.Page.form
+
+
+{-| -}
+list :
+    { title : Html msg
+    , init : PageRouteParams params -> model -> Maybe (List resource)
+    , toItem : model -> resource -> { label : Html msg, actions : Html msg }
+    }
+    -> Page model msg params
+    -> Page model msg params
+list =
+    ElmAdmin.Internal.Page.list

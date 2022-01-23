@@ -31,7 +31,7 @@ type alias Form resource =
 
 
 {-| -}
-form : a -> FormBuilder resource a
+form : String -> a -> FormBuilder resource a
 form =
     ElmAdmin.Internal.Form.form
 
