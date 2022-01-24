@@ -3,8 +3,8 @@ module ElmAdmin.UI.Form exposing (..)
 import Dict
 import ElmAdmin.Internal.Form exposing (Field(..), FieldValue(..), Form, FormModel)
 import ElmAdmin.Shared exposing (Msg(..))
-import ElmAdmin.UI.Loading
 import ElmWidgets as W
+import ElmWidgets.Attributes as WA
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onSubmit)
@@ -64,5 +64,5 @@ viewLoading form =
         [ p [ class "eadm eadm-form-title" ] [ text form.title ]
         , section
             [ class "eadm eadm-form-loading" ]
-            [ ElmAdmin.UI.Loading.view ]
+            [ W.loadingCircle [ WA.size 32 ] ]
         ]

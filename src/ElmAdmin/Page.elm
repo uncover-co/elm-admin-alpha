@@ -27,6 +27,7 @@ import Dict exposing (Dict)
 import ElmAdmin.Form
 import ElmAdmin.Internal.Page exposing (PageRouteParams)
 import ElmAdmin.Shared exposing (Action, Effect(..), Msg(..))
+import ElmWidgets as W
 import Html exposing (Html)
 
 
@@ -111,7 +112,14 @@ form =
 list :
     { title : Html msg
     , init : PageRouteParams params -> model -> Maybe (List resource)
-    , toItem : model -> resource -> { label : Html msg, actions : Html msg }
+    , toItem :
+        model
+        -> resource
+        ->
+            { label : Html msg
+            , actions : List (Html msg)
+            , options : List (W.DataRowAttributes msg -> W.DataRowAttributes msg)
+            }
     }
     -> Page model msg params
     -> Page model msg params

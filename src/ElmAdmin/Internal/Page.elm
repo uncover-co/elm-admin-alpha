@@ -23,6 +23,7 @@ import ElmAdmin.Router exposing (RouteParams, pathFromString)
 import ElmAdmin.Shared exposing (Action, Effect(..), Msg(..))
 import ElmAdmin.UI.Form
 import ElmAdmin.UI.List
+import ElmWidgets as W
 import Html as H exposing (Html)
 import Html.Attributes as HA
 import Set
@@ -399,7 +400,14 @@ form props (Page p) =
 list :
     { title : Html msg
     , init : PageRouteParams params -> model -> Maybe (List a)
-    , toItem : model -> a -> { label : Html msg, actions : Html msg }
+    , toItem :
+        model
+        -> a
+        ->
+            { label : Html msg
+            , actions : List (Html msg)
+            , options : List (W.DataRowAttributes msg -> W.DataRowAttributes msg)
+            }
     }
     -> Page model msg params
     -> Page model msg params

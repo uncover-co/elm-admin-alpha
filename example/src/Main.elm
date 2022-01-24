@@ -4,6 +4,7 @@ import ElmAdmin as A exposing (ElmAdmin, admin)
 import ElmAdmin.Actions as AA
 import ElmAdmin.Form as AF
 import ElmAdmin.Page as AP
+import ElmWidgets.Attributes as WA
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import ThemeSpec
@@ -15,7 +16,7 @@ type alias Msg =
 
 type alias Model =
     { user : Maybe User
-    , users : List User
+    , users : Maybe (List User)
     }
 
 
@@ -54,14 +55,24 @@ createUser =
             , form = createUserForm
             , onSubmit =
                 \_ model user ->
-                    ( { model | users = user :: model.users }
+                    ( case model.users of
+                        Just users ->
+                            { model | users = Just (user :: users) }
+
+                        Nothing ->
+                            { model | users = Just [ user ] }
                     , AA.initForm createUserForm emptyUser
                     )
             }
         |> AP.list
             { title = text "All Users"
-            , init = \_ model -> Nothing
-            , toItem = \_ user -> { label = text user.name, actions = text "" }
+            , init = \_ model -> model.users
+            , toItem =
+                \_ user ->
+                    { label = text user.name
+                    , actions = []
+                    , options = [ WA.href "/logAction/#" ]
+                    }
             }
 
 
@@ -72,7 +83,7 @@ main =
         , init =
             \_ _ ->
                 ( { user = Nothing
-                  , users = []
+                  , users = Nothing
                   }
                 , AA.none
                 )
