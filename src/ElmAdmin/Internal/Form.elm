@@ -4,11 +4,14 @@ module ElmAdmin.Internal.Form exposing
     , Form
     , FormBuilder
     , FormModel
+    , RadioButtonsFieldOptions
     , TextFieldOptions
+    , autocompleteField
     , checkboxField
     , empty
     , form
     , initFields
+    , radioButtonsField
     , rangeField
     , textField
     )
@@ -61,11 +64,17 @@ initFields resource form_ formModel =
                             TextField { fromResource } ->
                                 FieldValueString <| fromResource resource
 
+                            AutocompleteField { fromResource } ->
+                                FieldValueString <| fromResource resource
+
                             CheckboxField { fromResource } ->
                                 FieldValueBool <| fromResource resource
 
                             RangeField { fromResource } ->
                                 FieldValueFloat <| fromResource resource
+
+                            RadioButtonsField { fromResource } ->
+                                FieldValueString <| fromResource resource
                     )
                 )
             |> Dict.fromList
@@ -99,6 +108,10 @@ type Field resource
         { fromResource : resource -> String
         , options : TextFieldOptions
         }
+    | AutocompleteField
+        { fromResource : resource -> String
+        , options : AutocompleteFieldOptions
+        }
     | RangeField
         { fromResource : resource -> Float
         , options : RangeFieldOptions
@@ -106,6 +119,10 @@ type Field resource
     | CheckboxField
         { fromResource : resource -> Bool
         , options : CheckboxOptions
+        }
+    | RadioButtonsField
+        { fromResource : resource -> String
+        , options : RadioButtonsFieldOptions
         }
 
 
@@ -124,6 +141,54 @@ textField label fromResource options_ f =
     , fields =
         ( label
         , TextField
+            { fromResource = fromResource
+            , options = options
+            }
+        )
+            :: f.fields
+    , resolver =
+        \formModel ->
+            f.resolver formModel
+                |> Maybe.andThen
+                    (\resolver ->
+                        case Dict.get label formModel.values of
+                            Just (FieldValueString v) ->
+                                Just (resolver v)
+
+                            _ ->
+                                Nothing
+                    )
+    }
+
+
+
+-- AutocompleteField
+
+
+type alias AutocompleteFieldOptions =
+    {}
+
+
+autocompleteFieldDefaults : AutocompleteFieldOptions
+autocompleteFieldDefaults =
+    {}
+
+
+autocompleteField :
+    String
+    -> (resource -> String)
+    -> List (AutocompleteFieldOptions -> AutocompleteFieldOptions)
+    -> FormBuilder resource (String -> a)
+    -> FormBuilder resource a
+autocompleteField label fromResource options_ f =
+    let
+        options =
+            List.foldl (\fn a -> fn a) autocompleteFieldDefaults options_
+    in
+    { title = f.title
+    , fields =
+        ( label
+        , RadioButtonsField
             { fromResource = fromResource
             , options = options
             }
@@ -186,6 +251,54 @@ checkboxField label fromResource options_ f =
                     (\resolver ->
                         case Dict.get label formModel.values of
                             Just (FieldValueBool v) ->
+                                Just (resolver v)
+
+                            _ ->
+                                Nothing
+                    )
+    }
+
+
+
+-- RadioButtonsField
+
+
+type alias RadioButtonsFieldOptions =
+    {}
+
+
+radioButtonsFieldDefaults : RadioButtonsFieldOptions
+radioButtonsFieldDefaults =
+    {}
+
+
+radioButtonsField :
+    String
+    -> (resource -> String)
+    -> List (RadioButtonsFieldOptions -> RadioButtonsFieldOptions)
+    -> FormBuilder resource (String -> a)
+    -> FormBuilder resource a
+radioButtonsField label fromResource options_ f =
+    let
+        options =
+            List.foldl (\fn a -> fn a) radioButtonsFieldDefaults options_
+    in
+    { title = f.title
+    , fields =
+        ( label
+        , RadioButtonsField
+            { fromResource = fromResource
+            , options = options
+            }
+        )
+            :: f.fields
+    , resolver =
+        \formModel ->
+            f.resolver formModel
+                |> Maybe.andThen
+                    (\resolver ->
+                        case Dict.get label formModel.values of
+                            Just (FieldValueString v) ->
                                 Just (resolver v)
 
                             _ ->

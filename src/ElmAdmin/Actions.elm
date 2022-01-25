@@ -1,5 +1,5 @@
 module ElmAdmin.Actions exposing
-    ( cmd, none, batch
+    ( cmd, none, batch, Action
     , showNotification, showHighlightNotification, showSuccessNotification, showWarningNotification, showDangerNotification
     , initForm
     )
@@ -44,7 +44,7 @@ But you can also trigger actions that will be handled by ElmAdmin itself.
 
 # Commands
 
-@docs cmd, none, batch
+@docs cmd, none, batch, Action
 
 
 # Notifications
@@ -66,6 +66,11 @@ import ElmAdmin.Shared exposing (Action, Effect(..), Msg(..))
 import ElmAdmin.UI.Notification
 import Html as H
 import SubCmd
+
+
+{-| -}
+type alias Action msg =
+    ElmAdmin.Shared.Action msg
 
 
 {-| Sends a command that will be handled by your update functions.

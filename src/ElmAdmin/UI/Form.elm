@@ -43,6 +43,21 @@ view formModel form =
                                             }
                                     }
 
+                            ( RangeField { options }, Just (FieldValueFloat v) ) ->
+                                W.field []
+                                    { label = text label
+                                    , input =
+                                        W.rangeInput []
+                                            { value = v
+                                            , min = options.min
+                                            , max = options.max
+                                            , step = options.step
+                                            , onInput =
+                                                ElmAdmin.Internal.Form.FieldValueFloat
+                                                    >> UpdateFormField label
+                                            }
+                                    }
+
                             _ ->
                                 text ""
                     )
