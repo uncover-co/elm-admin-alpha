@@ -1,5 +1,6 @@
 module ElmAdmin.Internal.Form exposing
-    ( Field(..)
+    ( AutocompleteFieldAttributes
+    , Field(..)
     , FieldValue(..)
     , Form
     , FormBuilder
@@ -17,6 +18,7 @@ module ElmAdmin.Internal.Form exposing
     )
 
 import Dict exposing (Dict)
+import ElmAdmin.Libs.List
 import Set exposing (Set)
 
 
@@ -30,28 +32,29 @@ type FieldValue
     = FieldValueString String
     | FieldValueFloat Float
     | FieldValueBool Bool
+    | FieldValueAutocomplete ( String, Maybe String )
 
 
-type alias Form r =
-    FormBuilder r r
+type alias Form model msg resource =
+    FormBuilder model msg resource resource
 
 
-type alias FormBuilder resource a =
+type alias FormBuilder model msg resource a =
     { title : String
-    , fields : List ( String, Field resource )
-    , resolver : FormModel -> Maybe a
+    , fields : List ( String, Field model msg resource )
+    , resolver : FormModel -> model -> Maybe a
     }
 
 
-form : String -> a -> FormBuilder resource a
+form : String -> a -> FormBuilder model msg resource a
 form title a =
     { title = title
     , fields = []
-    , resolver = \_ -> Just a
+    , resolver = \_ _ -> Just a
     }
 
 
-initFields : resource -> Form resource -> FormModel -> FormModel
+initFields : resource -> Form msg model resource -> FormModel -> FormModel
 initFields resource form_ formModel =
     { initialized =
         Set.insert form_.title formModel.initialized
@@ -65,7 +68,9 @@ initFields resource form_ formModel =
                                 FieldValueString <| fromResource resource
 
                             AutocompleteField { fromResource } ->
-                                FieldValueString <| fromResource resource
+                                fromResource resource
+                                    |> Maybe.map (\v -> FieldValueAutocomplete ( v, fromResource resource ))
+                                    |> Maybe.withDefault (FieldValueAutocomplete ( "", Nothing ))
 
                             CheckboxField { fromResource } ->
                                 FieldValueBool <| fromResource resource
@@ -103,14 +108,15 @@ textFieldDefaults =
     }
 
 
-type Field resource
+type Field model msg resource
     = TextField
         { fromResource : resource -> String
         , options : TextFieldOptions
         }
     | AutocompleteField
-        { fromResource : resource -> String
-        , options : AutocompleteFieldOptions
+        { fromResource : resource -> Maybe String
+        , options : model -> Maybe (List String)
+        , attrs : AutocompleteFieldAttributes msg
         }
     | RangeField
         { fromResource : resource -> Float
@@ -130,8 +136,8 @@ textField :
     String
     -> (resource -> String)
     -> List (TextFieldOptions -> TextFieldOptions)
-    -> FormBuilder resource (String -> a)
-    -> FormBuilder resource a
+    -> FormBuilder model msg resource (String -> a)
+    -> FormBuilder model msg resource a
 textField label fromResource options_ f =
     let
         options =
@@ -147,8 +153,8 @@ textField label fromResource options_ f =
         )
             :: f.fields
     , resolver =
-        \formModel ->
-            f.resolver formModel
+        \formModel model ->
+            f.resolver formModel model
                 |> Maybe.andThen
                     (\resolver ->
                         case Dict.get label formModel.values of
@@ -165,43 +171,69 @@ textField label fromResource options_ f =
 -- AutocompleteField
 
 
-type alias AutocompleteFieldOptions =
-    {}
+type alias AutocompleteFieldAttributes msg =
+    { onEnter : Maybe (String -> msg) }
 
 
-autocompleteFieldDefaults : AutocompleteFieldOptions
+autocompleteFieldDefaults : AutocompleteFieldAttributes msg
 autocompleteFieldDefaults =
-    {}
+    { onEnter = Nothing }
 
 
 autocompleteField :
-    String
-    -> (resource -> String)
-    -> List (AutocompleteFieldOptions -> AutocompleteFieldOptions)
-    -> FormBuilder resource (String -> a)
-    -> FormBuilder resource a
-autocompleteField label fromResource options_ f =
+    { label : String
+    , value : resource -> Maybe x
+    , options : model -> Maybe (List x)
+    , optionToLabel : x -> String
+    , attrs : List (AutocompleteFieldAttributes msg -> AutocompleteFieldAttributes msg)
+    }
+    -> FormBuilder model msg resource (Maybe x -> a)
+    -> FormBuilder model msg resource a
+autocompleteField props f =
     let
-        options =
-            List.foldl (\fn a -> fn a) autocompleteFieldDefaults options_
+        attrs : AutocompleteFieldAttributes msg
+        attrs =
+            List.foldl (\fn a -> fn a) autocompleteFieldDefaults props.attrs
+
+        fromResource : resource -> Maybe String
+        fromResource resource =
+            props.value resource
+                |> Maybe.map props.optionToLabel
+
+        options : model -> Maybe (List String)
+        options model =
+            props.options model
+                |> Maybe.map (List.map props.optionToLabel)
     in
     { title = f.title
     , fields =
-        ( label
-        , RadioButtonsField
+        ( props.label
+        , AutocompleteField
             { fromResource = fromResource
             , options = options
+            , attrs = attrs
             }
         )
             :: f.fields
     , resolver =
-        \formModel ->
-            f.resolver formModel
+        \formModel model ->
+            f.resolver formModel model
                 |> Maybe.andThen
                     (\resolver ->
-                        case Dict.get label formModel.values of
-                            Just (FieldValueString v) ->
-                                Just (resolver v)
+                        case Dict.get props.label formModel.values of
+                            Just (FieldValueAutocomplete ( _, v )) ->
+                                let
+                                    value =
+                                        case ( v, props.options model ) of
+                                            ( Just v_, Just options_ ) ->
+                                                ElmAdmin.Libs.List.find
+                                                    (\option -> props.optionToLabel option == v_)
+                                                    options_
+
+                                            _ ->
+                                                Nothing
+                                in
+                                Just (resolver value)
 
                             _ ->
                                 Nothing
@@ -228,8 +260,8 @@ checkboxField :
     String
     -> (resource -> Bool)
     -> List (CheckboxOptions -> CheckboxOptions)
-    -> FormBuilder resource (Bool -> a)
-    -> FormBuilder resource a
+    -> FormBuilder model msg resource (Bool -> a)
+    -> FormBuilder model msg resource a
 checkboxField label fromResource options_ f =
     let
         options =
@@ -245,8 +277,8 @@ checkboxField label fromResource options_ f =
         )
             :: f.fields
     , resolver =
-        \formModel ->
-            f.resolver formModel
+        \formModel model ->
+            f.resolver formModel model
                 |> Maybe.andThen
                     (\resolver ->
                         case Dict.get label formModel.values of
@@ -276,8 +308,8 @@ radioButtonsField :
     String
     -> (resource -> String)
     -> List (RadioButtonsFieldOptions -> RadioButtonsFieldOptions)
-    -> FormBuilder resource (String -> a)
-    -> FormBuilder resource a
+    -> FormBuilder model msg resource (String -> a)
+    -> FormBuilder model msg resource a
 radioButtonsField label fromResource options_ f =
     let
         options =
@@ -293,8 +325,8 @@ radioButtonsField label fromResource options_ f =
         )
             :: f.fields
     , resolver =
-        \formModel ->
-            f.resolver formModel
+        \formModel model ->
+            f.resolver formModel model
                 |> Maybe.andThen
                     (\resolver ->
                         case Dict.get label formModel.values of
@@ -332,8 +364,8 @@ rangeField :
     String
     -> (resource -> Float)
     -> List (RangeFieldOptions -> RangeFieldOptions)
-    -> FormBuilder resource (Float -> a)
-    -> FormBuilder resource a
+    -> FormBuilder model msg resource (Float -> a)
+    -> FormBuilder model msg resource a
 rangeField label fromResource options_ f =
     let
         options =
@@ -349,8 +381,8 @@ rangeField label fromResource options_ f =
         )
             :: f.fields
     , resolver =
-        \formModel ->
-            f.resolver formModel
+        \formModel model ->
+            f.resolver formModel model
                 |> Maybe.andThen
                     (\resolver ->
                         case Dict.get label formModel.values of

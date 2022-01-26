@@ -130,7 +130,7 @@ showDangerNotification content =
 
 
 {-| -}
-initForm : Form resource -> resource -> Action msg
+initForm : Form model msg resource -> resource -> Action msg
 initForm form resource =
     ElmAdmin.Internal.Form.initFields resource form
         |> UpdateFormModel

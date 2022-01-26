@@ -7,71 +7,151 @@ import ElmAdmin.Page as AP
 import ElmWidgets.Attributes as WA
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import ThemeSpec
 
 
-type alias Msg =
-    ()
+
+-- Model
 
 
-type alias Model =
-    { user : Maybe User
-    , users : Maybe (List User)
+type Model
+    = SignedOut
+    | SignedIn SignedInModel
+
+
+type alias SignedInModel =
+    { user : User
+    , users : List User
+    , posts : List Post
+    }
+
+
+signedIn : Model -> Maybe SignedInModel
+signedIn model =
+    case model of
+        SignedIn m ->
+            Just m
+
+        _ ->
+            Nothing
+
+
+type alias Post =
+    { title : String
+    , author : User
     }
 
 
 type alias User =
     { name : String
-    , isAdmin : Bool
     }
 
 
 emptyUser : User
 emptyUser =
     { name = ""
-    , isAdmin = False
     }
 
 
-workspacesIndex : AP.Page Model Msg ()
-workspacesIndex =
-    AP.page "Workspaces"
-        |> AP.view (\_ _ -> div [] [ text "Workspaces" ])
+
+-- Update
 
 
-createUserForm : AF.Form User
-createUserForm =
-    AF.form "Create User" User
-        |> AF.textField "Name" .name []
-        |> AF.checkboxField "Admin" .isAdmin []
+type Msg
+    = SignIn User
+    | CreatePost PostForm
 
 
-createUser : AP.Page Model Msg ()
-createUser =
-    AP.page "Create User"
-        |> AP.init (\_ model -> ( model, AA.none ))
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    case model of
+        SignedIn m ->
+            signedInUpdate msg m
+                |> Tuple.mapFirst SignedIn
+
+        SignedOut ->
+            case msg of
+                SignIn user ->
+                    ( SignedIn
+                        { user = user
+                        , users = [ user ]
+                        , posts = []
+                        }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
+
+signedInUpdate : Msg -> SignedInModel -> ( SignedInModel, Cmd Msg )
+signedInUpdate msg model =
+    case msg of
+        CreatePost postForm ->
+            case postForm.author of
+                Just author ->
+                    ( { model | posts = { title = postForm.title, author = author } :: model.posts }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        _ ->
+            ( model, Cmd.none )
+
+
+type alias PostForm =
+    { title : String
+    , author : Maybe User
+    }
+
+
+emptyPostForm : PostForm
+emptyPostForm =
+    { title = ""
+    , author = Nothing
+    }
+
+
+
+-- Pages
+
+
+pageSignIn : AP.Page Model Msg ()
+pageSignIn =
+    AP.page "Sign In"
         |> AP.form
             { init = \_ _ -> Just emptyUser
-            , form = createUserForm
-            , onSubmit =
-                \_ model user ->
-                    ( case model.users of
-                        Just users ->
-                            { model | users = Just (user :: users) }
+            , onSubmit = SignIn
+            , form =
+                AF.form "Create User" User
+                    |> AF.textField "Name" .name []
+            }
 
-                        Nothing ->
-                            { model | users = Just [ user ] }
-                    , AA.initForm createUserForm emptyUser
-                    )
+
+pagePosts : AP.Page SignedInModel Msg ()
+pagePosts =
+    AP.page "Posts"
+        |> AP.form
+            { init = \_ _ -> Just emptyPostForm
+            , onSubmit = CreatePost
+            , form =
+                AF.form "Create Post" PostForm
+                    |> AF.textField "Title" .title []
+                    |> AF.autocompleteField
+                        { label = "Author"
+                        , value = .author
+                        , options = \model -> Just model.users
+                        , optionToLabel = .name
+                        , attrs = []
+                        }
             }
         |> AP.list
-            { title = text "All Users"
-            , init = \_ model -> model.users
+            { title = text "All Posts"
+            , init = \_ model -> Just model.posts
             , toItem =
-                \_ user ->
-                    { label = text user.name
+                \model post ->
+                    { label = text post.title
                     , actions = []
-                    , options = [ WA.href "/logAction/#" ]
+                    , options = []
                     }
             }
 
@@ -80,23 +160,18 @@ main : ElmAdmin () Model Msg
 main =
     admin
         { title = "Admin"
-        , init =
-            \_ _ ->
-                ( { user = Nothing
-                  , users = Nothing
-                  }
-                , AA.none
-                )
+        , init = \_ _ -> ( SignedOut, Cmd.none )
+        , update = \_ -> update
+        , subscriptions = \_ _ -> Sub.none
         }
         [ A.theme [ A.preferDarkMode ]
         , A.pages
-            [ A.single "/workspaces" "Workspaces" workspacesIndex
+            [ A.single "/sign-in" "Sign In" pageSignIn
             ]
         , A.protectedPages
-            { fromModel = \model -> Just model
-            , toModel = \_ model -> model
+            { fromModel = signedIn
+            , toModel = \_ -> SignedIn
             }
-            [ A.single "/workspaces/new" "Create" workspacesIndex
-            , A.single "/users/new" "User" createUser
+            [ A.single "/posts" "Posts" pagePosts
             ]
         ]

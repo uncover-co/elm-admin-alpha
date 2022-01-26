@@ -1,7 +1,6 @@
 module ElmAdmin.Internal.Page exposing
     ( Page
     , PageData
-    , PageRouteParams
     , Route
     , form
     , init
@@ -54,26 +53,19 @@ type alias PageData model msg =
     }
 
 
-type alias PageRouteParams params =
-    { path : String
-    , pathParams : params
-    , queryParams : Dict String (List String)
-    }
-
-
 {-| -}
 type Page model msg params
     = Page
         { title : String
-        , toParams : Dict String String -> Maybe params
+        , toParams : RouteParams -> Maybe params
         , sampleParams : Maybe (Dict String String)
         , page :
-            { nav : Maybe (PageRouteParams params -> model -> String)
-            , title : PageRouteParams params -> model -> String
-            , init : PageRouteParams params -> model -> ( model, Action msg )
-            , update : FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, Action msg )
-            , subscriptions : PageRouteParams params -> model -> Sub (Msg msg)
-            , view : FormModel -> PageRouteParams params -> model -> Html (Msg msg)
+            { nav : Maybe (params -> model -> String)
+            , title : params -> model -> String
+            , init : params -> model -> ( model, Action msg )
+            , update : FormModel -> params -> Msg msg -> model -> ( model, Action msg )
+            , subscriptions : params -> model -> Sub (Msg msg)
+            , view : FormModel -> params -> model -> Html (Msg msg)
             }
         }
 
@@ -101,48 +93,36 @@ route page_ path =
                             |> Maybe.map
                                 (\nav_ ->
                                     \routeParams model_ ->
-                                        pageRouteParams page_ routeParams
+                                        p.toParams routeParams
                                             |> Maybe.map (\params_ -> nav_ params_ model_)
                                             |> Maybe.withDefault ""
                                 )
                     , title =
                         \routeParams model_ ->
-                            pageRouteParams page_ routeParams
+                            p.toParams routeParams
                                 |> Maybe.map (\params_ -> p.page.title params_ model_)
                                 |> Maybe.withDefault ""
                     , init =
                         \routeParams model_ ->
-                            pageRouteParams page_ routeParams
+                            p.toParams routeParams
                                 |> Maybe.map (\params_ -> p.page.init params_ model_)
                                 |> Maybe.withDefault ( model_, SubCmd.none )
                     , update =
                         \formModel_ routeParams msg model_ ->
-                            pageRouteParams page_ routeParams
+                            p.toParams routeParams
                                 |> Maybe.map (\params_ -> p.page.update formModel_ params_ msg model_)
                                 |> Maybe.withDefault ( model_, SubCmd.none )
                     , subscriptions =
                         \routeParams model_ ->
-                            pageRouteParams page_ routeParams
+                            p.toParams routeParams
                                 |> Maybe.map (\params_ -> p.page.subscriptions params_ model_)
                                 |> Maybe.withDefault Sub.none
                     , view =
                         \formModel_ routeParams model_ ->
-                            pageRouteParams page_ routeParams
+                            p.toParams routeParams
                                 |> Maybe.map (\params_ -> p.page.view formModel_ params_ model_)
                                 |> Maybe.withDefault (H.text "")
                     }
-                }
-            )
-
-
-pageRouteParams : Page model msg params -> RouteParams -> Maybe (PageRouteParams params)
-pageRouteParams (Page p) routeParams =
-    p.toParams routeParams.pathParams
-        |> Maybe.map
-            (\pathParams ->
-                { path = routeParams.path
-                , pathParams = pathParams
-                , queryParams = routeParams.queryParams
                 }
             )
 
@@ -180,7 +160,11 @@ validPageAtPath (Page p) pathParamList =
                         |> Dict.fromList
                     )
     in
-    p.toParams sampleParams_
+    p.toParams
+        { path = ""
+        , pathParams = sampleParams_
+        , queryParams = Dict.empty
+        }
         |> Maybe.map (\_ -> Page p)
 
 
@@ -206,7 +190,7 @@ page title_ =
 
 
 params :
-    (Dict String String -> Maybe params)
+    (RouteParams -> Maybe params)
     -> Page model msg x
     -> Page model msg params
 params toParams (Page p) =
@@ -231,7 +215,7 @@ toTitle (Page p) =
 
 
 nav :
-    (PageRouteParams params -> model -> String)
+    (params -> model -> String)
     -> Page model msg params
     -> Page model msg params
 nav nav_ (Page p) =
@@ -243,7 +227,7 @@ nav nav_ (Page p) =
 
 
 title :
-    (PageRouteParams params -> model -> String)
+    (params -> model -> String)
     -> Page model msg params
     -> Page model msg params
 title title_ (Page p) =
@@ -255,7 +239,7 @@ title title_ (Page p) =
 
 
 init :
-    (PageRouteParams params -> model -> ( model, Action msg ))
+    (params -> model -> ( model, Action msg ))
     -> Page model msg params
     -> Page model msg params
 init init_ (Page p) =
@@ -272,7 +256,7 @@ init init_ (Page p) =
     Page { p | page = { page_ | init = init__ } }
 
 
-update : (PageRouteParams params -> Msg msg -> model -> ( model, Action msg )) -> Page model msg params -> Page model msg params
+update : (params -> Msg msg -> model -> ( model, Action msg )) -> Page model msg params -> Page model msg params
 update update_ (Page p) =
     let
         page_ =
@@ -287,7 +271,7 @@ update update_ (Page p) =
     Page { p | page = { page_ | update = update__ } }
 
 
-subscriptions : (PageRouteParams params -> model -> Sub msg) -> Page model msg params -> Page model msg params
+subscriptions : (params -> model -> Sub msg) -> Page model msg params -> Page model msg params
 subscriptions subscriptions_ (Page p) =
     let
         page_ =
@@ -303,7 +287,7 @@ subscriptions subscriptions_ (Page p) =
     Page { p | page = { page_ | subscriptions = subscriptions__ } }
 
 
-view : (PageRouteParams params -> model -> Html msg) -> Page model msg params -> Page model msg params
+view : (params -> model -> Html msg) -> Page model msg params -> Page model msg params
 view view_ (Page p) =
     let
         page_ =
@@ -320,9 +304,9 @@ view view_ (Page p) =
 
 
 form :
-    { init : PageRouteParams params -> model -> Maybe resource
-    , form : ElmAdmin.Internal.Form.Form resource
-    , onSubmit : PageRouteParams params -> model -> resource -> ( model, Action msg )
+    { init : params -> model -> Maybe resource
+    , form : ElmAdmin.Internal.Form.Form model msg resource
+    , onSubmit : resource -> msg
     }
     -> Page model msg params
     -> Page model msg params
@@ -349,18 +333,8 @@ form props (Page p) =
 
         update_ =
             withUpdate p.page.update
-                (\formModel routeParams msg model ->
-                    if Set.member props.form.title formModel.initialized then
-                        case msg of
-                            SubmitForm ->
-                                props.form.resolver formModel
-                                    |> Maybe.map (props.onSubmit routeParams model)
-                                    |> Maybe.withDefault ( model, SubCmd.none )
-
-                            _ ->
-                                ( model, SubCmd.none )
-
-                    else
+                (\formModel routeParams _ model ->
+                    if not (Set.member props.form.title formModel.initialized) then
                         props.init routeParams model
                             |> Maybe.map
                                 (\resource ->
@@ -372,15 +346,20 @@ form props (Page p) =
                                     )
                                 )
                             |> Maybe.withDefault ( model, SubCmd.none )
+
+                    else
+                        ( model, SubCmd.none )
                 )
 
         view_ =
             withView p.page.view
-                (\formModel _ _ ->
+                (\formModel _ model ->
                     if Set.member props.form.title formModel.initialized then
                         ElmAdmin.UI.Form.view
                             formModel
+                            model
                             props.form
+                            props.onSubmit
 
                     else
                         ElmAdmin.UI.Form.viewLoading props.form
@@ -399,7 +378,7 @@ form props (Page p) =
 
 list :
     { title : Html msg
-    , init : PageRouteParams params -> model -> Maybe (List a)
+    , init : params -> model -> Maybe (List a)
     , toItem :
         model
         -> a
@@ -435,9 +414,9 @@ list props (Page p) =
 
 
 withInit :
-    (PageRouteParams params -> model -> ( model, Action msg ))
-    -> (PageRouteParams params -> model -> ( model, Action msg ))
-    -> PageRouteParams params
+    (params -> model -> ( model, Action msg ))
+    -> (params -> model -> ( model, Action msg ))
+    -> params
     -> model
     -> ( model, Action msg )
 withInit before after routeParams model =
@@ -449,10 +428,10 @@ withInit before after routeParams model =
 
 
 withUpdate :
-    (FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, Action msg ))
-    -> (FormModel -> PageRouteParams params -> Msg msg -> model -> ( model, Action msg ))
+    (FormModel -> params -> Msg msg -> model -> ( model, Action msg ))
+    -> (FormModel -> params -> Msg msg -> model -> ( model, Action msg ))
     -> FormModel
-    -> PageRouteParams params
+    -> params
     -> Msg msg
     -> model
     -> ( model, Action msg )
@@ -465,9 +444,9 @@ withUpdate before after formModel routeParams msg model =
 
 
 withSubscriptions :
-    (PageRouteParams params -> model -> Sub (Msg msg))
-    -> (PageRouteParams params -> model -> Sub (Msg msg))
-    -> PageRouteParams params
+    (params -> model -> Sub (Msg msg))
+    -> (params -> model -> Sub (Msg msg))
+    -> params
     -> model
     -> Sub (Msg msg)
 withSubscriptions before after routeParams model =
@@ -478,10 +457,10 @@ withSubscriptions before after routeParams model =
 
 
 withView :
-    (FormModel -> PageRouteParams params -> model -> Html (Msg msg))
-    -> (FormModel -> PageRouteParams params -> model -> Html (Msg msg))
+    (FormModel -> params -> model -> Html (Msg msg))
+    -> (FormModel -> params -> model -> Html (Msg msg))
     -> FormModel
-    -> PageRouteParams params
+    -> params
     -> model
     -> Html (Msg msg)
 withView before after formData routeParams model =

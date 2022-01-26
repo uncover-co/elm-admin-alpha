@@ -1,7 +1,7 @@
 module ElmAdmin exposing
-    ( admin, pages, protectedPages, update, subscriptions, theme, ElmAdmin
+    ( admin, adminWithActions, pages, protectedPages, theme, ElmAdmin, Options
     , single, url, external, group, visualGroup, folderGroup, NavigationItem
-    , hidden, disabled, Options
+    , hidden, disabled
     , RouteParams
     , preferDarkMode, darkTheme, lightTheme, darkModeClass, disableModeSwitch
     )
@@ -11,7 +11,7 @@ module ElmAdmin exposing
 
 # Setup
 
-@docs admin, pages, protectedPages, update, subscriptions, theme, ElmAdmin
+@docs admin, adminWithActions, pages, protectedPages, theme, ElmAdmin, Options
 
 
 # Navigation
@@ -21,7 +21,7 @@ module ElmAdmin exposing
 
 # Navigation Options
 
-@docs hidden, disabled, Options
+@docs hidden, disabled
 
 
 # Pages
@@ -38,6 +38,7 @@ module ElmAdmin exposing
 import Browser
 import Browser.Navigation exposing (..)
 import Dict exposing (Dict)
+import ElmAdmin.Actions
 import ElmAdmin.Application
 import ElmAdmin.Internal.Page exposing (Page, Route)
 import ElmAdmin.Router
@@ -47,7 +48,6 @@ import ElmAdmin.UI.Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Set exposing (Set)
-import SubCmd
 import ThemeSpec
 import Url exposing (Url)
 
@@ -501,14 +501,11 @@ darkTheme theme_ (ThemeOptions options) =
 
 {-| -}
 type Options flags model protectedModel msg
-    = Options (OptionsData flags model protectedModel msg)
+    = Options (OptionsData model protectedModel msg)
 
 
-type alias OptionsData flags model protectedModel msg =
+type alias OptionsData model protectedModel msg =
     { theme : ThemeOptions
-    , init : Maybe (flags -> Browser.Navigation.Key -> ( model, Action msg ))
-    , update : RouteParams -> msg -> model -> ( model, Action msg )
-    , subscriptions : RouteParams -> model -> Sub msg
     , pages : List (NavigationItem model msg)
     , protectedPages : List (NavigationItem protectedModel msg)
     , protectedModel : model -> Maybe protectedModel
@@ -520,35 +517,10 @@ defaultOptions : Options flags model protectedModel msg
 defaultOptions =
     Options
         { theme = themeDefaults
-        , init = Nothing
-        , update = \_ _ model -> ( model, SubCmd.none )
-        , subscriptions = \_ _ -> Sub.none
         , pages = []
         , protectedPages = []
         , protectedModel = \_ -> Nothing
         , protectedToModel = \model _ -> model
-        }
-
-
-{-| -}
-update : (RouteParams -> msg -> model -> ( model, Action msg )) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
-update update_ (Options options) =
-    Options
-        { options
-            | update =
-                \routeParams msg model ->
-                    update_ routeParams msg model
-        }
-
-
-{-| -}
-subscriptions : (RouteParams -> model -> Sub msg) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
-subscriptions subscriptions_ (Options options) =
-    Options
-        { options
-            | subscriptions =
-                \routeParams model ->
-                    subscriptions_ routeParams model
         }
 
 
@@ -578,33 +550,43 @@ protectedPages { fromModel, toModel } protectedPages_ (Options options) =
 
 
 {-| Bootstraps your admin application.
-
-    admin
-        { title = "My Admin"
-        , init = init
-        }
-        [ theme [ preferDarkMode ]
-        , update myUpdate
-        , pages
-            [ A.external "Docs" "https://package.elm-lang.org/"
-            , A.single "Home" Home.page
-            , A.group "Users"
-                Users.index
-                [ A.single "Create" Users.create
-                , A.url Users.show
-                , A.url Users.update
-                ]
-            ]
-        ]
-
 -}
 admin :
-    { title : String, init : flags -> Browser.Navigation.Key -> ( model, Action msg ) }
+    { title : String
+    , init : flags -> Browser.Navigation.Key -> ( model, Cmd msg )
+    , update : RouteParams -> msg -> model -> ( model, Cmd msg )
+    , subscriptions : RouteParams -> model -> Sub msg
+    }
     -> List (Options flags model protectedModel msg -> Options flags model protectedModel msg)
     -> ElmAdmin flags model msg
-admin props options_ =
+admin props =
+    adminWithActions
+        { title = props.title
+        , init =
+            \flags key ->
+                props.init flags key
+                    |> Tuple.mapSecond ElmAdmin.Actions.cmd
+        , update =
+            \routeParams msg model ->
+                props.update routeParams msg model
+                    |> Tuple.mapSecond ElmAdmin.Actions.cmd
+        , subscriptions = props.subscriptions
+        }
+
+
+{-| Bootstraps your admin application with actions.
+-}
+adminWithActions :
+    { title : String
+    , init : flags -> Browser.Navigation.Key -> ( model, Action msg )
+    , update : RouteParams -> msg -> model -> ( model, Action msg )
+    , subscriptions : RouteParams -> model -> Sub msg
+    }
+    -> List (Options flags model protectedModel msg -> Options flags model protectedModel msg)
+    -> ElmAdmin flags model msg
+adminWithActions props options_ =
     let
-        options : OptionsData flags model protectedModel msg
+        options : OptionsData model protectedModel msg
         options =
             List.foldl (\fn a -> fn a) defaultOptions options_
                 |> (\(Options o) -> o)
@@ -778,7 +760,7 @@ admin props options_ =
                         }
                 , update =
                     ElmAdmin.Application.update
-                        { update = options.update
+                        { update = props.update
                         , pages = pages_
                         , protectedPages = protectedPages_
                         , pageRoutes = pageRoutes
@@ -788,7 +770,7 @@ admin props options_ =
                         }
                 , subscriptions =
                     ElmAdmin.Application.subscriptions
-                        { subscriptions = options.subscriptions
+                        { subscriptions = props.subscriptions
                         , pages = pages_
                         , protectedPages = protectedPages_
                         , protectedModel = options.protectedModel

@@ -7,12 +7,26 @@ import ElmWidgets as W
 import ElmWidgets.Attributes as WA
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onSubmit)
+import Html.Events as HE
+import Json.Decode as D
 
 
-view : FormModel -> Form resource -> Html (Msg msg)
-view formModel form =
-    Html.form [ class "eadm eadm-card", onSubmit SubmitForm ]
+view : FormModel -> model -> Form model msg resource -> (resource -> msg) -> Html (Msg msg)
+view formModel model form onSubmit =
+    Html.form
+        [ class "eadm eadm-card"
+        , HE.preventDefaultOn "submit"
+            ((\_ ->
+                D.succeed
+                    (form.resolver formModel model
+                        |> Maybe.map (GotMsg << onSubmit)
+                        |> Maybe.withDefault DoNothing
+                    )
+             )
+                |> D.lazy
+                |> D.map (\msg -> ( msg, True ))
+            )
+        ]
         [ p [ class "eadm eadm-form-title" ] [ text form.title ]
         , ul [ class "eadm eadm-form-fields" ]
             (form.fields
@@ -28,6 +42,27 @@ view formModel form =
                                             , onInput =
                                                 ElmAdmin.Internal.Form.FieldValueString
                                                     >> UpdateFormField label
+                                            }
+                                    }
+
+                            ( AutocompleteField props, Just (FieldValueAutocomplete ( search, value )) ) ->
+                                W.field []
+                                    { label = text label
+                                    , input =
+                                        W.autocomplete []
+                                            { id = label
+                                            , search = search
+                                            , value = value
+                                            , options = props.options model
+                                            , toLabel = identity
+                                            , onInput =
+                                                \search_ value_ ->
+                                                    ( search_, value_ )
+                                                        |> ElmAdmin.Internal.Form.FieldValueAutocomplete
+                                                        |> UpdateFormField label
+                                            , onEnter =
+                                                props.attrs.onEnter
+                                                    |> Maybe.map (\fn -> GotMsg (fn search))
                                             }
                                     }
 
@@ -73,9 +108,9 @@ view formModel form =
         ]
 
 
-viewLoading : Form resource -> Html (Msg msg)
+viewLoading : Form model msg resource -> Html (Msg msg)
 viewLoading form =
-    Html.form [ class "eadm eadm-card", onSubmit SubmitForm ]
+    Html.div [ class "eadm eadm-card" ]
         [ p [ class "eadm eadm-form-title" ] [ text form.title ]
         , section
             [ class "eadm eadm-form-loading" ]

@@ -318,19 +318,26 @@ update props msg model =
                             , effectToMsg = GotEffect
                             }
 
-                routeStuff =
-                    case props.protectedModel model_ of
-                        Just protectedModel_ ->
-                            routeFromPath model.routeParams protectedModel_ props.protectedPages
-                                |> Maybe.map
-                                    (\r ->
-                                        r.route.page.update model.formModel r.routeParams msg r.model
-                                            |> SubModule.updateWithEffect
-                                                { toModel = props.protectedToModel model_
-                                                , toMsg = GotMsg
-                                                , effectToMsg = GotEffect
-                                                }
-                                    )
+                protectedStuff =
+                    props.protectedModel model_
+                        |> Maybe.andThen
+                            (\protectedModel_ ->
+                                routeFromPath model.routeParams protectedModel_ props.protectedPages
+                                    |> Maybe.map
+                                        (\r ->
+                                            r.route.page.update model.formModel r.routeParams msg r.model
+                                                |> SubModule.updateWithEffect
+                                                    { toModel = props.protectedToModel model_
+                                                    , toMsg = GotMsg
+                                                    , effectToMsg = GotEffect
+                                                    }
+                                        )
+                            )
+
+                ( model__, routeCmd ) =
+                    case protectedStuff of
+                        Just protectedStuff_ ->
+                            protectedStuff_
 
                         Nothing ->
                             routeFromPath model.routeParams model_ props.pages
@@ -343,13 +350,10 @@ update props msg model =
                                                 , effectToMsg = GotEffect
                                                 }
                                     )
-
-                ( model__, routeCmd ) =
-                    routeStuff
-                        |> Maybe.withDefault
-                            ( model_
-                            , Browser.Navigation.pushUrl model.navKey "/"
-                            )
+                                |> Maybe.withDefault
+                                    ( model_
+                                    , Browser.Navigation.pushUrl model.navKey "/"
+                                    )
             in
             ( { model | model = model__ }
             , Cmd.batch [ cmd, routeCmd ]
