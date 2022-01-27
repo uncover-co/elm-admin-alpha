@@ -257,7 +257,7 @@ card =
 form :
     { init : model -> params -> Maybe resource
     , form : ElmAdmin.Form.Form model msg params resource
-    , onSubmit : resource -> msg
+    , onSubmit : model -> params -> resource -> msg
     }
     -> Page model msg params
     -> Page model msg params

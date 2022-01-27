@@ -340,7 +340,7 @@ card view_ (Page p) =
 form :
     { init : model -> params -> Maybe resource
     , form : ElmAdmin.Internal.Form.Form model msg params resource
-    , onSubmit : resource -> msg
+    , onSubmit : model -> params -> resource -> msg
     }
     -> Page model msg params
     -> Page model msg params

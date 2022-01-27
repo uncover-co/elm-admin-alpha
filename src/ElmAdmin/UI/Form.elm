@@ -11,7 +11,7 @@ import Html.Events as HE
 import Json.Decode as D
 
 
-view : FormModel -> model -> params -> Form model msg params resource -> (resource -> msg) -> Html (Msg msg)
+view : FormModel -> model -> params -> Form model msg params resource -> (model -> params -> resource -> msg) -> Html (Msg msg)
 view formModel model params form onSubmit =
     Html.form
         [ class "eadm eadm-card"
@@ -19,7 +19,7 @@ view formModel model params form onSubmit =
             ((\_ ->
                 D.succeed
                     (form.resolver formModel model
-                        |> Maybe.map (GotMsg << onSubmit)
+                        |> Maybe.map (GotMsg << onSubmit model params)
                         |> Maybe.withDefault DoNothing
                     )
              )
