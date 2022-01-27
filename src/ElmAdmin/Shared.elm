@@ -48,7 +48,7 @@ type Msg msg
     | HideNotification Posix
     | SetNotificationExpiration Posix
     | SubmitForm
-    | UpdateFormField String FieldValue
+    | UpdateFormField ( String, String ) FieldValue
 
 
 type Effect msg

@@ -2,7 +2,7 @@ module ElmAdmin.Page exposing
     ( page, title, nav, Page
     , init, update, subscriptions, view
     , initWithActions, updateWithActions
-    , form, list
+    , card, form, list
     , params, oneParam, customParam
     , parsedParams, paramsParser, path, query, queryList, custom, ParamsParser
     )
@@ -27,7 +27,7 @@ module ElmAdmin.Page exposing
 
 ## Especial Views
 
-@docs form, list
+@docs card, form, list
 
 
 ## Params
@@ -175,7 +175,7 @@ queryList query_ (ParamsParser resolver) =
 
 {-| -}
 nav :
-    (params -> model -> String)
+    (model -> params -> String)
     -> Page model msg params
     -> Page model msg params
 nav =
@@ -184,7 +184,7 @@ nav =
 
 {-| -}
 title :
-    (params -> model -> String)
+    (model -> params -> String)
     -> Page model msg params
     -> Page model msg params
 title =
@@ -193,7 +193,7 @@ title =
 
 {-| -}
 init :
-    (params -> model -> ( model, Cmd msg ))
+    (model -> params -> ( model, Cmd msg ))
     -> Page model msg params
     -> Page model msg params
 init init_ =
@@ -206,7 +206,7 @@ init init_ =
 
 {-| -}
 initWithActions :
-    (params -> model -> ( model, Action msg ))
+    (model -> params -> ( model, Action msg ))
     -> Page model msg params
     -> Page model msg params
 initWithActions =
@@ -215,7 +215,7 @@ initWithActions =
 
 {-| -}
 update :
-    (params -> Msg msg -> model -> ( model, Cmd msg ))
+    (Msg msg -> model -> params -> ( model, Cmd msg ))
     -> Page model msg params
     -> Page model msg params
 update update_ =
@@ -228,7 +228,7 @@ update update_ =
 
 {-| -}
 updateWithActions :
-    (params -> Msg msg -> model -> ( model, Action msg ))
+    (Msg msg -> model -> params -> ( model, Action msg ))
     -> Page model msg params
     -> Page model msg params
 updateWithActions =
@@ -236,21 +236,27 @@ updateWithActions =
 
 
 {-| -}
-subscriptions : (params -> model -> Sub msg) -> Page model msg params -> Page model msg params
+subscriptions : (model -> params -> Sub msg) -> Page model msg params -> Page model msg params
 subscriptions =
     ElmAdmin.Internal.Page.subscriptions
 
 
 {-| -}
-view : (params -> model -> Html msg) -> Page model msg params -> Page model msg params
+view : (model -> params -> Html msg) -> Page model msg params -> Page model msg params
 view =
     ElmAdmin.Internal.Page.view
 
 
 {-| -}
+card : (model -> params -> Html msg) -> Page model msg params -> Page model msg params
+card =
+    ElmAdmin.Internal.Page.card
+
+
+{-| -}
 form :
-    { init : params -> model -> Maybe resource
-    , form : ElmAdmin.Form.Form model msg resource
+    { init : model -> params -> Maybe resource
+    , form : ElmAdmin.Form.Form model msg params resource
     , onSubmit : resource -> msg
     }
     -> Page model msg params
@@ -262,7 +268,7 @@ form =
 {-| -}
 list :
     { title : Html msg
-    , init : params -> model -> Maybe (List resource)
+    , init : model -> params -> Maybe (List resource)
     , toItem :
         model
         -> resource

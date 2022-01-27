@@ -1,42 +1,80 @@
 module ElmAdmin.Form exposing
     ( form, Form, Field
-    , textField, TextFieldOptions
-    , autocompleteField, AutocompleteFieldAttributes
-    , checkboxField, CheckboxFieldOptions
-    , rangeField, RangeFieldOptions
+    , text, TextAttributes
+    , autocomplete, AutocompleteAttributes
+    , checkbox, CheckboxAttributes
+    , radio, RadioAttributes
+    , select, SelectAttributes
+    , range, RangeAttributes
+    , required, hidden
     )
 
 {-|
 
 @docs form, Form, Field
 
-@docs textField, TextFieldOptions
 
-@docs autocompleteField, AutocompleteFieldAttributes
+# Form Fields
 
-@docs checkboxField, CheckboxFieldOptions
 
-@docs rangeField, RangeFieldOptions
+## Text
+
+@docs text, TextAttributes
+
+
+## Autocomplete
+
+@docs autocomplete, AutocompleteAttributes
+
+
+## Checkbox
+
+@docs checkbox, CheckboxAttributes
+
+
+## Radio
+
+@docs radio, RadioAttributes
+
+
+## Select
+
+@docs select, SelectAttributes
+
+
+## Range
+
+@docs range, RangeAttributes
+
+
+# Attributes
+
+@docs required, hidden
 
 -}
 
+import Dict
 import ElmAdmin.Internal.Form exposing (Field(..), FieldValue(..), FormBuilder)
+import ElmAdmin.Libs.List
 
 
 {-| -}
-type alias Field model msg resource =
-    ElmAdmin.Internal.Form.Field model msg resource
+type alias Field model msg params resource =
+    ElmAdmin.Internal.Form.Field model msg params resource
 
 
 {-| -}
-type alias Form model msg resource =
-    ElmAdmin.Internal.Form.Form model msg resource
+type alias Form model msg params resource =
+    ElmAdmin.Internal.Form.Form model msg params resource
 
 
 {-| -}
-form : String -> a -> FormBuilder model msg resource a
-form =
-    ElmAdmin.Internal.Form.form
+form : String -> a -> FormBuilder model msg params resource a
+form title a =
+    { title = title
+    , fields = []
+    , resolver = \_ _ -> Just a
+    }
 
 
 
@@ -44,19 +82,53 @@ form =
 
 
 {-| -}
-type alias TextFieldOptions =
-    ElmAdmin.Internal.Form.TextFieldOptions
+type alias TextAttributes model params resource =
+    { required : Bool
+    , hidden : Maybe (model -> params -> resource -> Bool)
+    }
+
+
+textDefaults : TextAttributes model params resource
+textDefaults =
+    { required = True
+    , hidden = Nothing
+    }
 
 
 {-| -}
-textField :
+text :
     String
     -> (resource -> String)
-    -> List (TextFieldOptions -> TextFieldOptions)
-    -> FormBuilder model msg resource (String -> a)
-    -> FormBuilder model msg resource a
-textField =
-    ElmAdmin.Internal.Form.textField
+    -> List (TextAttributes model params resource -> TextAttributes model params resource)
+    -> FormBuilder model msg params resource (String -> a)
+    -> FormBuilder model msg params resource a
+text label value attrs_ f =
+    let
+        attrs =
+            List.foldl (\fn a -> fn a) textDefaults attrs_
+    in
+    { title = f.title
+    , fields =
+        ( label
+        , Text
+            { value = value
+            , attrs = attrs
+            }
+        )
+            :: f.fields
+    , resolver =
+        \formModel model ->
+            f.resolver formModel model
+                |> Maybe.andThen
+                    (\resolver ->
+                        case Dict.get ( f.title, label ) formModel.values of
+                            Just (FieldValueString v) ->
+                                Just (resolver v)
+
+                            _ ->
+                                Nothing
+                    )
+    }
 
 
 
@@ -64,22 +136,81 @@ textField =
 
 
 {-| -}
-type alias AutocompleteFieldAttributes msg =
-    ElmAdmin.Internal.Form.AutocompleteFieldAttributes msg
+type alias AutocompleteAttributes model msg params resource =
+    { required : Bool
+    , hidden : Maybe (model -> params -> resource -> Bool)
+    , onEnter : Maybe (String -> msg)
+    }
+
+
+autocompleteDefaults : AutocompleteAttributes model msg params resource
+autocompleteDefaults =
+    { required = False
+    , hidden = Nothing
+    , onEnter = Nothing
+    }
 
 
 {-| -}
-autocompleteField :
+autocomplete :
     { label : String
     , value : resource -> Maybe x
     , options : model -> Maybe (List x)
     , optionToLabel : x -> String
-    , attrs : List (AutocompleteFieldAttributes msg -> AutocompleteFieldAttributes msg)
+    , attrs : List (AutocompleteAttributes model msg params resource -> AutocompleteAttributes model msg params resource)
     }
-    -> FormBuilder model msg resource (Maybe x -> a)
-    -> FormBuilder model msg resource a
-autocompleteField =
-    ElmAdmin.Internal.Form.autocompleteField
+    -> FormBuilder model msg params resource (Maybe x -> a)
+    -> FormBuilder model msg params resource a
+autocomplete props f =
+    let
+        attrs : AutocompleteAttributes model msg params resource
+        attrs =
+            List.foldl (\fn a -> fn a) autocompleteDefaults props.attrs
+
+        value : resource -> Maybe String
+        value resource =
+            props.value resource
+                |> Maybe.map props.optionToLabel
+
+        options : model -> Maybe (List String)
+        options model =
+            props.options model
+                |> Maybe.map (List.map props.optionToLabel)
+    in
+    { title = f.title
+    , fields =
+        ( props.label
+        , Autocomplete
+            { value = value
+            , options = options
+            , attrs = attrs
+            }
+        )
+            :: f.fields
+    , resolver =
+        \formModel model ->
+            f.resolver formModel model
+                |> Maybe.andThen
+                    (\resolver ->
+                        case Dict.get ( f.title, props.label ) formModel.values of
+                            Just (FieldValueAutocomplete ( _, v )) ->
+                                let
+                                    value_ =
+                                        case ( v, props.options model ) of
+                                            ( Just v_, Just options_ ) ->
+                                                ElmAdmin.Libs.List.find
+                                                    (\option -> props.optionToLabel option == v_)
+                                                    options_
+
+                                            _ ->
+                                                Nothing
+                                in
+                                Just (resolver value_)
+
+                            _ ->
+                                Nothing
+                    )
+    }
 
 
 
@@ -87,20 +218,169 @@ autocompleteField =
 
 
 {-| -}
-type alias CheckboxFieldOptions =
-    { required : Bool
+type alias CheckboxAttributes model params resource =
+    { hidden : Maybe (model -> params -> resource -> Bool)
+    }
+
+
+checkboxDefaults : CheckboxAttributes model params resource
+checkboxDefaults =
+    { hidden = Nothing
     }
 
 
 {-| -}
-checkboxField :
+checkbox :
     String
     -> (resource -> Bool)
-    -> List (CheckboxFieldOptions -> CheckboxFieldOptions)
-    -> FormBuilder model msg resource (Bool -> a)
-    -> FormBuilder model msg resource a
-checkboxField =
-    ElmAdmin.Internal.Form.checkboxField
+    -> List (CheckboxAttributes model params resource -> CheckboxAttributes model params resource)
+    -> FormBuilder model msg params resource (Bool -> a)
+    -> FormBuilder model msg params resource a
+checkbox label value attrs_ f =
+    let
+        attrs =
+            List.foldl (\fn a -> fn a) checkboxDefaults attrs_
+    in
+    { title = f.title
+    , fields =
+        ( label
+        , Checkbox
+            { value = value
+            , attrs = attrs
+            }
+        )
+            :: f.fields
+    , resolver =
+        \formModel model ->
+            f.resolver formModel model
+                |> Maybe.andThen
+                    (\resolver ->
+                        case Dict.get ( f.title, label ) formModel.values of
+                            Just (FieldValueBool v) ->
+                                Just (resolver v)
+
+                            _ ->
+                                Nothing
+                    )
+    }
+
+
+
+-- Radio
+
+
+{-| -}
+type alias RadioAttributes model params resource =
+    { hidden : Maybe (model -> params -> resource -> Bool)
+    }
+
+
+radioDefaults : RadioAttributes model params resource
+radioDefaults =
+    { hidden = Nothing
+    }
+
+
+{-| -}
+radio :
+    { label : String
+    , value : resource -> x
+    , options : model -> List x
+    , optionToLabel : x -> String
+    , attrs : List (RadioAttributes model params resource -> RadioAttributes model params resource)
+    }
+    -> FormBuilder model msg params resource (x -> a)
+    -> FormBuilder model msg params resource a
+radio props f =
+    let
+        attrs =
+            List.foldl (\fn a -> fn a) radioDefaults props.attrs
+    in
+    { title = f.title
+    , fields =
+        ( props.label
+        , Radio
+            { value = props.value >> props.optionToLabel
+            , options = props.options >> List.map props.optionToLabel
+            , attrs = attrs
+            }
+        )
+            :: f.fields
+    , resolver =
+        \formModel model ->
+            f.resolver formModel model
+                |> Maybe.andThen
+                    (\resolver ->
+                        case Dict.get ( f.title, props.label ) formModel.values of
+                            Just (FieldValueString v) ->
+                                props.options model
+                                    |> ElmAdmin.Libs.List.find
+                                        (\option -> props.optionToLabel option == v)
+                                    |> Maybe.map resolver
+
+                            _ ->
+                                Nothing
+                    )
+    }
+
+
+
+-- Radio
+
+
+{-| -}
+type alias SelectAttributes model params resource =
+    { hidden : Maybe (model -> params -> resource -> Bool)
+    }
+
+
+selectDefaults : SelectAttributes model params resource
+selectDefaults =
+    { hidden = Nothing
+    }
+
+
+{-| -}
+select :
+    { label : String
+    , value : resource -> x
+    , options : model -> List x
+    , optionToLabel : x -> String
+    , attrs : List (SelectAttributes model params resource -> SelectAttributes model params resource)
+    }
+    -> FormBuilder model msg params resource (x -> a)
+    -> FormBuilder model msg params resource a
+select props f =
+    let
+        attrs =
+            List.foldl (\fn a -> fn a) selectDefaults props.attrs
+    in
+    { title = f.title
+    , fields =
+        ( props.label
+        , Select
+            { value = props.value >> props.optionToLabel
+            , options = props.options >> List.map props.optionToLabel
+            , attrs = attrs
+            }
+        )
+            :: f.fields
+    , resolver =
+        \formModel model ->
+            f.resolver formModel model
+                |> Maybe.andThen
+                    (\resolver ->
+                        case Dict.get ( f.title, props.label ) formModel.values of
+                            Just (FieldValueString v) ->
+                                props.options model
+                                    |> ElmAdmin.Libs.List.find
+                                        (\option -> props.optionToLabel option == v)
+                                    |> Maybe.map resolver
+
+                            _ ->
+                                Nothing
+                    )
+    }
 
 
 
@@ -108,20 +388,76 @@ checkboxField =
 
 
 {-| -}
-type alias RangeFieldOptions =
-    { required : Bool
-    , min : Float
-    , max : Float
-    , step : Float
+type alias RangeAttributes model params resource =
+    { hidden : Maybe (model -> params -> resource -> Bool)
+    }
+
+
+rangeDefaults : RangeAttributes model params resource
+rangeDefaults =
+    { hidden = Nothing
     }
 
 
 {-| -}
-rangeField :
-    String
-    -> (resource -> Float)
-    -> List (RangeFieldOptions -> RangeFieldOptions)
-    -> FormBuilder model msg resource (Float -> a)
-    -> FormBuilder model msg resource a
-rangeField =
-    ElmAdmin.Internal.Form.rangeField
+range :
+    { label : String
+    , value : resource -> Float
+    , min : Float
+    , max : Float
+    , step : Float
+    , attrs : List (RangeAttributes model params resource -> RangeAttributes model params resource)
+    }
+    -> FormBuilder model msg params resource (Float -> a)
+    -> FormBuilder model msg params resource a
+range props f =
+    let
+        attrs =
+            List.foldl (\fn a -> fn a) rangeDefaults props.attrs
+    in
+    { title = f.title
+    , fields =
+        ( props.label
+        , Range
+            { value = props.value
+            , min = props.min
+            , max = props.max
+            , step = props.step
+            , attrs = attrs
+            }
+        )
+            :: f.fields
+    , resolver =
+        \formModel model ->
+            f.resolver formModel model
+                |> Maybe.andThen
+                    (\resolver ->
+                        case Dict.get ( f.title, props.label ) formModel.values of
+                            Just (FieldValueFloat v) ->
+                                Just (resolver v)
+
+                            _ ->
+                                Nothing
+                    )
+    }
+
+
+
+-- Attributes
+
+
+{-| -}
+hidden :
+    (model -> params -> resource -> Bool)
+    -> { m | hidden : Maybe (model -> params -> resource -> Bool) }
+    -> { m | hidden : Maybe (model -> params -> resource -> Bool) }
+hidden v a =
+    { a | hidden = Just v }
+
+
+{-| -}
+required :
+    { m | required : Bool }
+    -> { m | required : Bool }
+required a =
+    { a | required = True }

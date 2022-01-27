@@ -129,8 +129,9 @@ showDangerNotification content =
     SubCmd.effect <| ShowNotification ElmAdmin.UI.Notification.Danger content
 
 
-{-| -}
-initForm : Form model msg resource -> resource -> Action msg
+{-| Set a form state based on a resource.
+-}
+initForm : Form model msg params resource -> resource -> Action msg
 initForm form resource =
     ElmAdmin.Internal.Form.initFields resource form
         |> UpdateFormModel

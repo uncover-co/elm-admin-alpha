@@ -2,6 +2,7 @@ module ElmAdmin.Internal.Page exposing
     ( Page
     , PageData
     , Route
+    , card
     , form
     , init
     , list
@@ -59,13 +60,14 @@ type Page model msg params
         { title : String
         , toParams : RouteParams -> Maybe params
         , sampleParams : Maybe (Dict String String)
+        , forms : Dict String Int
         , page :
-            { nav : Maybe (params -> model -> String)
-            , title : params -> model -> String
-            , init : params -> model -> ( model, Action msg )
-            , update : FormModel -> params -> Msg msg -> model -> ( model, Action msg )
-            , subscriptions : params -> model -> Sub (Msg msg)
-            , view : FormModel -> params -> model -> Html (Msg msg)
+            { nav : Maybe (model -> params -> String)
+            , title : model -> params -> String
+            , init : model -> params -> ( model, Action msg )
+            , update : FormModel -> Msg msg -> model -> params -> ( model, Action msg )
+            , subscriptions : model -> params -> Sub (Msg msg)
+            , view : FormModel -> model -> params -> Html (Msg msg)
             }
         }
 
@@ -81,6 +83,7 @@ route page_ path =
             pathFromString path
     in
     validPageAtPath page_ pathParams
+        |> Maybe.andThen validatePageForms
         |> Maybe.map
             (\(Page p) ->
                 { disabled = \_ _ -> False
@@ -94,33 +97,33 @@ route page_ path =
                                 (\nav_ ->
                                     \routeParams model_ ->
                                         p.toParams routeParams
-                                            |> Maybe.map (\params_ -> nav_ params_ model_)
+                                            |> Maybe.map (\params_ -> nav_ model_ params_)
                                             |> Maybe.withDefault ""
                                 )
                     , title =
                         \routeParams model_ ->
                             p.toParams routeParams
-                                |> Maybe.map (\params_ -> p.page.title params_ model_)
+                                |> Maybe.map (\params_ -> p.page.title model_ params_)
                                 |> Maybe.withDefault ""
                     , init =
                         \routeParams model_ ->
                             p.toParams routeParams
-                                |> Maybe.map (\params_ -> p.page.init params_ model_)
+                                |> Maybe.map (\params_ -> p.page.init model_ params_)
                                 |> Maybe.withDefault ( model_, SubCmd.none )
                     , update =
                         \formModel_ routeParams msg model_ ->
                             p.toParams routeParams
-                                |> Maybe.map (\params_ -> p.page.update formModel_ params_ msg model_)
+                                |> Maybe.map (\params_ -> p.page.update formModel_ msg model_ params_)
                                 |> Maybe.withDefault ( model_, SubCmd.none )
                     , subscriptions =
                         \routeParams model_ ->
                             p.toParams routeParams
-                                |> Maybe.map (\params_ -> p.page.subscriptions params_ model_)
+                                |> Maybe.map (\params_ -> p.page.subscriptions model_ params_)
                                 |> Maybe.withDefault Sub.none
                     , view =
                         \formModel_ routeParams model_ ->
                             p.toParams routeParams
-                                |> Maybe.map (\params_ -> p.page.view formModel_ params_ model_)
+                                |> Maybe.map (\params_ -> p.page.view formModel_ model_ params_)
                                 |> Maybe.withDefault (H.text "")
                     }
                 }
@@ -168,6 +171,23 @@ validPageAtPath (Page p) pathParamList =
         |> Maybe.map (\_ -> Page p)
 
 
+{-| Pages can't have two identical forms.
+Form Id's are generated as a hash of both form title + fields.
+So if we have two forms with the exact same Id chances are they are the same – even if they were built separately.
+-}
+validatePageForms : Page model msg params -> Maybe (Page model msg params)
+validatePageForms (Page p) =
+    let
+        duplicates =
+            Dict.filter (\_ v -> v > 1) p.forms
+    in
+    if Dict.isEmpty duplicates then
+        Just (Page p)
+
+    else
+        Nothing
+
+
 
 -- Page builders
 
@@ -178,11 +198,12 @@ page title_ =
         { title = title_
         , toParams = \_ -> Just ()
         , sampleParams = Nothing
+        , forms = Dict.empty
         , page =
             { nav = Nothing
             , title = \_ _ -> title_
-            , init = \_ model -> ( model, SubCmd.none )
-            , update = \_ _ _ model -> ( model, SubCmd.none )
+            , init = \model _ -> ( model, SubCmd.none )
+            , update = \_ _ model _ -> ( model, SubCmd.none )
             , subscriptions = \_ _ -> Sub.none
             , view = \_ _ _ -> H.text ""
             }
@@ -198,11 +219,12 @@ params toParams (Page p) =
         { title = p.title
         , toParams = toParams
         , sampleParams = p.sampleParams
+        , forms = p.forms
         , page =
             { nav = Nothing
             , title = \_ _ -> p.title
-            , init = \_ model -> ( model, SubCmd.none )
-            , update = \_ _ _ model -> ( model, SubCmd.none )
+            , init = \model _ -> ( model, SubCmd.none )
+            , update = \_ _ model _ -> ( model, SubCmd.none )
             , subscriptions = \_ _ -> Sub.none
             , view = \_ _ _ -> H.text ""
             }
@@ -215,7 +237,7 @@ toTitle (Page p) =
 
 
 nav :
-    (params -> model -> String)
+    (model -> params -> String)
     -> Page model msg params
     -> Page model msg params
 nav nav_ (Page p) =
@@ -227,7 +249,7 @@ nav nav_ (Page p) =
 
 
 title :
-    (params -> model -> String)
+    (model -> params -> String)
     -> Page model msg params
     -> Page model msg params
 title title_ (Page p) =
@@ -239,7 +261,7 @@ title title_ (Page p) =
 
 
 init :
-    (params -> model -> ( model, Action msg ))
+    (model -> params -> ( model, Action msg ))
     -> Page model msg params
     -> Page model msg params
 init init_ (Page p) =
@@ -248,30 +270,24 @@ init init_ (Page p) =
             p.page
 
         init__ =
-            withInit p.page.init
-                (\routeParams model ->
-                    init_ routeParams model
-                )
+            withInit p.page.init init_
     in
     Page { p | page = { page_ | init = init__ } }
 
 
-update : (params -> Msg msg -> model -> ( model, Action msg )) -> Page model msg params -> Page model msg params
+update : (Msg msg -> model -> params -> ( model, Action msg )) -> Page model msg params -> Page model msg params
 update update_ (Page p) =
     let
         page_ =
             p.page
 
         update__ =
-            withUpdate p.page.update
-                (\_ routeParams msg model ->
-                    update_ routeParams msg model
-                )
+            withUpdate p.page.update (\_ -> update_)
     in
     Page { p | page = { page_ | update = update__ } }
 
 
-subscriptions : (params -> model -> Sub msg) -> Page model msg params -> Page model msg params
+subscriptions : (model -> params -> Sub msg) -> Page model msg params -> Page model msg params
 subscriptions subscriptions_ (Page p) =
     let
         page_ =
@@ -279,15 +295,15 @@ subscriptions subscriptions_ (Page p) =
 
         subscriptions__ =
             withSubscriptions p.page.subscriptions
-                (\routeParams model ->
-                    subscriptions_ routeParams model
+                (\model params_ ->
+                    subscriptions_ model params_
                         |> Sub.map GotMsg
                 )
     in
     Page { p | page = { page_ | subscriptions = subscriptions__ } }
 
 
-view : (params -> model -> Html msg) -> Page model msg params -> Page model msg params
+view : (model -> params -> Html msg) -> Page model msg params -> Page model msg params
 view view_ (Page p) =
     let
         page_ =
@@ -295,8 +311,26 @@ view view_ (Page p) =
 
         view__ =
             withView p.page.view
-                (\_ routeParams model ->
-                    view_ routeParams model
+                (\_ model params_ ->
+                    view_ model params_
+                        |> H.map GotMsg
+                )
+    in
+    Page { p | page = { page_ | view = view__ } }
+
+
+card : (model -> params -> Html msg) -> Page model msg params -> Page model msg params
+card view_ (Page p) =
+    let
+        page_ =
+            p.page
+
+        view__ =
+            withView p.page.view
+                (\_ model params_ ->
+                    H.div [ HA.class "eadm eadm-card" ]
+                        [ view_ model params_
+                        ]
                         |> H.map GotMsg
                 )
     in
@@ -304,8 +338,8 @@ view view_ (Page p) =
 
 
 form :
-    { init : params -> model -> Maybe resource
-    , form : ElmAdmin.Internal.Form.Form model msg resource
+    { init : model -> params -> Maybe resource
+    , form : ElmAdmin.Internal.Form.Form model msg params resource
     , onSubmit : resource -> msg
     }
     -> Page model msg params
@@ -317,8 +351,8 @@ form props (Page p) =
 
         init_ =
             withInit p.page.init
-                (\routeParams model ->
-                    props.init routeParams model
+                (\model params_ ->
+                    props.init model params_
                         |> Maybe.map
                             (\resource ->
                                 ( model
@@ -333,9 +367,9 @@ form props (Page p) =
 
         update_ =
             withUpdate p.page.update
-                (\formModel routeParams _ model ->
+                (\formModel _ model params_ ->
                     if not (Set.member props.form.title formModel.initialized) then
-                        props.init routeParams model
+                        props.init model params_
                             |> Maybe.map
                                 (\resource ->
                                     ( model
@@ -353,11 +387,12 @@ form props (Page p) =
 
         view_ =
             withView p.page.view
-                (\formModel _ model ->
+                (\formModel model params_ ->
                     if Set.member props.form.title formModel.initialized then
                         ElmAdmin.UI.Form.view
                             formModel
                             model
+                            params_
                             props.form
                             props.onSubmit
 
@@ -367,7 +402,16 @@ form props (Page p) =
     in
     Page
         { p
-            | page =
+            | forms =
+                p.forms
+                    |> Dict.update props.form.title
+                        (\r ->
+                            r
+                                |> Maybe.withDefault 0
+                                |> (+) 1
+                                |> Just
+                        )
+            , page =
                 { page_
                     | init = init_
                     , update = update_
@@ -378,7 +422,7 @@ form props (Page p) =
 
 list :
     { title : Html msg
-    , init : params -> model -> Maybe (List a)
+    , init : model -> params -> Maybe (List a)
     , toItem :
         model
         -> a
@@ -397,11 +441,11 @@ list props (Page p) =
 
         view_ =
             withView p.page.view
-                (\_ routeParams model ->
+                (\_ model params_ ->
                     ElmAdmin.UI.List.view
                         { title = props.title
                         , items =
-                            props.init routeParams model
+                            props.init model params_
                                 |> Maybe.map (List.map (props.toItem model))
                         }
                 )
@@ -414,59 +458,59 @@ list props (Page p) =
 
 
 withInit :
-    (params -> model -> ( model, Action msg ))
-    -> (params -> model -> ( model, Action msg ))
-    -> params
+    (model -> params -> ( model, Action msg ))
+    -> (model -> params -> ( model, Action msg ))
     -> model
+    -> params
     -> ( model, Action msg )
-withInit before after routeParams model =
-    before routeParams model
+withInit before after model params_ =
+    before model params_
         |> (\( model_, cmd ) ->
-                after routeParams model_
+                after model_ params_
                     |> Tuple.mapSecond (\c -> SubCmd.batch [ c, cmd ])
            )
 
 
 withUpdate :
-    (FormModel -> params -> Msg msg -> model -> ( model, Action msg ))
-    -> (FormModel -> params -> Msg msg -> model -> ( model, Action msg ))
+    (FormModel -> Msg msg -> model -> params -> ( model, Action msg ))
+    -> (FormModel -> Msg msg -> model -> params -> ( model, Action msg ))
     -> FormModel
-    -> params
     -> Msg msg
     -> model
+    -> params
     -> ( model, Action msg )
-withUpdate before after formModel routeParams msg model =
-    before formModel routeParams msg model
+withUpdate before after formModel msg model params_ =
+    before formModel msg model params_
         |> (\( model_, cmd ) ->
-                after formModel routeParams msg model_
+                after formModel msg model_ params_
                     |> Tuple.mapSecond (\c -> SubCmd.batch [ c, cmd ])
            )
 
 
 withSubscriptions :
-    (params -> model -> Sub (Msg msg))
-    -> (params -> model -> Sub (Msg msg))
-    -> params
+    (model -> params -> Sub (Msg msg))
+    -> (model -> params -> Sub (Msg msg))
     -> model
+    -> params
     -> Sub (Msg msg)
-withSubscriptions before after routeParams model =
+withSubscriptions before after model params_ =
     Sub.batch
-        [ before routeParams model
-        , after routeParams model
+        [ before model params_
+        , after model params_
         ]
 
 
 withView :
-    (FormModel -> params -> model -> Html (Msg msg))
-    -> (FormModel -> params -> model -> Html (Msg msg))
+    (FormModel -> model -> params -> Html (Msg msg))
+    -> (FormModel -> model -> params -> Html (Msg msg))
     -> FormModel
-    -> params
     -> model
+    -> params
     -> Html (Msg msg)
-withView before after formData routeParams model =
+withView before after formData model params_ =
     H.div []
-        [ before formData routeParams model
+        [ before formData model params_
         , H.div [ HA.class "eadm eadm-view" ]
-            [ after formData routeParams model
+            [ after formData model params_
             ]
         ]

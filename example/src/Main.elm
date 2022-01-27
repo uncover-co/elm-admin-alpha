@@ -1,10 +1,8 @@
 module Main exposing (main)
 
 import ElmAdmin as A exposing (ElmAdmin, admin)
-import ElmAdmin.Actions as AA
 import ElmAdmin.Form as AF
 import ElmAdmin.Page as AP
-import ElmWidgets.Attributes as WA
 import Html exposing (..)
 import Html.Attributes exposing (..)
 
@@ -98,9 +96,27 @@ signedInUpdate msg model =
             ( model, Cmd.none )
 
 
+type Published
+    = Published
+    | NotPublished
+
+
+publishedToString : Published -> String
+publishedToString p =
+    case p of
+        Published ->
+            "Published"
+
+        NotPublished ->
+            "Draft"
+
+
 type alias PostForm =
     { title : String
     , author : Maybe User
+    , authorNickname : String
+    , published : Published
+    , age : Float
     }
 
 
@@ -108,11 +124,24 @@ emptyPostForm : PostForm
 emptyPostForm =
     { title = ""
     , author = Nothing
+    , authorNickname = ""
+    , published = NotPublished
+    , age = 20.0
     }
 
 
 
 -- Pages
+
+
+pageHome : AP.Page model msg ()
+pageHome =
+    AP.page "Welcome"
+        |> AP.card
+            (\_ _ ->
+                div [ style "padding" "20px" ]
+                    [ text "Welcome to our homepage!" ]
+            )
 
 
 pageSignIn : AP.Page Model Msg ()
@@ -122,8 +151,9 @@ pageSignIn =
             { init = \_ _ -> Just emptyUser
             , onSubmit = SignIn
             , form =
-                AF.form "Create User" User
-                    |> AF.textField "Name" .name []
+                AF.form "Create User"
+                    User
+                    |> AF.text "Name" .name []
             }
 
 
@@ -135,20 +165,39 @@ pagePosts =
             , onSubmit = CreatePost
             , form =
                 AF.form "Create Post" PostForm
-                    |> AF.textField "Title" .title []
-                    |> AF.autocompleteField
+                    |> AF.text "Title" .title []
+                    |> AF.autocomplete
                         { label = "Author"
                         , value = .author
                         , options = \model -> Just model.users
                         , optionToLabel = .name
                         , attrs = []
                         }
+                    |> AF.text "Author Nickname"
+                        .authorNickname
+                        [ AF.hidden (\_ _ f -> f.author == Nothing)
+                        ]
+                    |> AF.select
+                        { label = "Is Published"
+                        , value = .published
+                        , optionToLabel = publishedToString
+                        , options = \_ -> [ Published, NotPublished ]
+                        , attrs = []
+                        }
+                    |> AF.range
+                        { label = "Age"
+                        , value = .age
+                        , min = 18
+                        , max = 90
+                        , step = 1
+                        , attrs = []
+                        }
             }
         |> AP.list
             { title = text "All Posts"
-            , init = \_ model -> Just model.posts
+            , init = \model _ -> Just model.posts
             , toItem =
-                \model post ->
+                \_ post ->
                     { label = text post.title
                     , actions = []
                     , options = []
@@ -166,7 +215,8 @@ main =
         }
         [ A.theme [ A.preferDarkMode ]
         , A.pages
-            [ A.single "/sign-in" "Sign In" pageSignIn
+            [ A.url "/" pageHome
+            , A.single "/sign-in" "Sign In" pageSignIn
             ]
         , A.protectedPages
             { fromModel = signedIn
