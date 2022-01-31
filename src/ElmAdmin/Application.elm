@@ -21,6 +21,7 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events as HE
 import Html.Keyed
+import Set
 import SubModule
 import Task
 import ThemeSpec
@@ -394,37 +395,19 @@ update props msg model =
                         Time.now
                     )
 
-        SubmitForm ->
+        SetValidatedField id ->
             let
-                routeStuff =
-                    case props.protectedModel model.model of
-                        Just protectedModel_ ->
-                            routeFromPath model.routeParams protectedModel_ props.protectedPages
-                                |> Maybe.map
-                                    (\r ->
-                                        r.route.page.update model.formModel r.routeParams msg r.model
-                                            |> SubModule.updateWithEffect
-                                                { toModel = props.protectedToModel model.model
-                                                , toMsg = GotMsg
-                                                , effectToMsg = GotEffect
-                                                }
-                                    )
-
-                        Nothing ->
-                            routeFromPath model.routeParams model.model props.pages
-                                |> Maybe.map
-                                    (\r ->
-                                        r.route.page.update model.formModel r.routeParams msg r.model
-                                            |> SubModule.updateWithEffect
-                                                { toModel = identity
-                                                , toMsg = GotMsg
-                                                , effectToMsg = GotEffect
-                                                }
-                                    )
+                formModel =
+                    model.formModel
             in
-            routeStuff
-                |> Maybe.map (Tuple.mapFirst (\m -> { model | model = m }))
-                |> Maybe.withDefault ( model, Cmd.none )
+            ( { model
+                | formModel =
+                    { formModel
+                        | validated = Set.insert id formModel.validated
+                    }
+              }
+            , Cmd.none
+            )
 
         UpdateFormField k v ->
             let

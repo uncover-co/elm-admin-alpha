@@ -1,5 +1,6 @@
 module ElmAdmin.Internal.Page exposing
-    ( Page
+    ( FormAttributes
+    , Page
     , PageData
     , Route
     , card
@@ -337,15 +338,34 @@ card view_ (Page p) =
     Page { p | page = { page_ | view = view__ } }
 
 
+type alias FormAttributes model params =
+    { hidden : model -> params -> Bool
+    , loading : model -> params -> Bool
+    , readOnly : model -> params -> Bool
+    }
+
+
+formDefaults : FormAttributes model params
+formDefaults =
+    { hidden = \_ _ -> False
+    , loading = \_ _ -> False
+    , readOnly = \_ _ -> False
+    }
+
+
 form :
     { init : model -> params -> Maybe resource
     , form : ElmAdmin.Internal.Form.Form model msg params resource
+    , attrs : List (FormAttributes model params -> FormAttributes model params)
     , onSubmit : model -> params -> resource -> msg
     }
     -> Page model msg params
     -> Page model msg params
 form props (Page p) =
     let
+        attrs =
+            List.foldl (\fn a -> fn a) formDefaults props.attrs
+
         page_ =
             p.page
 
@@ -388,16 +408,16 @@ form props (Page p) =
         view_ =
             withView p.page.view
                 (\formModel model params_ ->
-                    if Set.member props.form.title formModel.initialized then
-                        ElmAdmin.UI.Form.view
-                            formModel
-                            model
-                            params_
-                            props.form
-                            props.onSubmit
-
-                    else
-                        ElmAdmin.UI.Form.viewLoading props.form
+                    ElmAdmin.UI.Form.view
+                        { formModel = formModel
+                        , model = model
+                        , params = params_
+                        , form = props.form
+                        , isLoading = attrs.loading model params_ || not (Set.member props.form.title formModel.initialized)
+                        , isHidden = attrs.hidden model params_
+                        , isReadOnly = attrs.readOnly model params_
+                        , onSubmit = props.onSubmit
+                        }
                 )
     in
     Page

@@ -150,6 +150,7 @@ pageSignIn =
         |> AP.form
             { init = \_ _ -> Just emptyUser
             , onSubmit = \_ _ -> SignIn
+            , attrs = []
             , form =
                 AF.form "Create User"
                     User
@@ -163,6 +164,7 @@ pagePosts =
         |> AP.form
             { init = \_ _ -> Just emptyPostForm
             , onSubmit = \_ _ -> CreatePost
+            , attrs = []
             , form =
                 AF.form "Create Post" PostForm
                     |> AF.text "Title" .title []

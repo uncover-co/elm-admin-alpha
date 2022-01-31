@@ -74,7 +74,7 @@ form : String -> a -> FormBuilder model msg params resource a
 form title a =
     { title = title
     , fields = []
-    , resolver = \_ _ -> Just a
+    , resolver = \_ _ -> Just ( a, Dict.empty )
     }
 
 
@@ -123,10 +123,14 @@ text label value attrs_ f =
         \formModel model ->
             f.resolver formModel model
                 |> Maybe.andThen
-                    (\resolver ->
+                    (\( resolver, errors ) ->
                         case Dict.get ( f.title, label ) formModel.values of
                             Just (FieldValueString v) ->
-                                Just (resolver v)
+                                if attrs.required && v == "" then
+                                    Just ( resolver v, Dict.insert label "Can't be blank" errors )
+
+                                else
+                                    Just ( resolver v, errors )
 
                             _ ->
                                 Nothing
@@ -196,7 +200,7 @@ autocomplete props f =
         \formModel model ->
             f.resolver formModel model
                 |> Maybe.andThen
-                    (\resolver ->
+                    (\( resolver, errors ) ->
                         case Dict.get ( f.title, props.label ) formModel.values of
                             Just (FieldValueAutocomplete ( _, v )) ->
                                 let
@@ -209,8 +213,15 @@ autocomplete props f =
 
                                             _ ->
                                                 Nothing
+
+                                    errors_ =
+                                        if attrs.required && value_ == Nothing then
+                                            Dict.insert props.label "Selecting a valid option is required." errors
+
+                                        else
+                                            errors
                                 in
-                                Just (resolver value_)
+                                Just ( resolver value_, errors_ )
 
                             _ ->
                                 Nothing
@@ -261,10 +272,10 @@ checkbox label value attrs_ f =
         \formModel model ->
             f.resolver formModel model
                 |> Maybe.andThen
-                    (\resolver ->
+                    (\( resolver, errors ) ->
                         case Dict.get ( f.title, label ) formModel.values of
                             Just (FieldValueBool v) ->
-                                Just (resolver v)
+                                Just ( resolver v, errors )
 
                             _ ->
                                 Nothing
@@ -319,13 +330,13 @@ radio props f =
         \formModel model ->
             f.resolver formModel model
                 |> Maybe.andThen
-                    (\resolver ->
+                    (\( resolver, errors ) ->
                         case Dict.get ( f.title, props.label ) formModel.values of
                             Just (FieldValueString v) ->
                                 props.options model
                                     |> ElmAdmin.Libs.List.find
                                         (\option -> props.optionToLabel option == v)
-                                    |> Maybe.map resolver
+                                    |> Maybe.map (\v_ -> ( resolver v_, errors ))
 
                             _ ->
                                 Nothing
@@ -380,13 +391,13 @@ select props f =
         \formModel model ->
             f.resolver formModel model
                 |> Maybe.andThen
-                    (\resolver ->
+                    (\( resolver, errors ) ->
                         case Dict.get ( f.title, props.label ) formModel.values of
                             Just (FieldValueString v) ->
                                 props.options model
                                     |> ElmAdmin.Libs.List.find
                                         (\option -> props.optionToLabel option == v)
-                                    |> Maybe.map resolver
+                                    |> Maybe.map (\v_ -> ( resolver v_, errors ))
 
                             _ ->
                                 Nothing
@@ -444,10 +455,10 @@ range props f =
         \formModel model ->
             f.resolver formModel model
                 |> Maybe.andThen
-                    (\resolver ->
+                    (\( resolver, errors ) ->
                         case Dict.get ( f.title, props.label ) formModel.values of
                             Just (FieldValueFloat v) ->
-                                Just (resolver v)
+                                Just ( resolver v, errors )
 
                             _ ->
                                 Nothing

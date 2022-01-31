@@ -47,7 +47,7 @@ type Msg msg
     | GotEffect (Effect msg)
     | HideNotification Posix
     | SetNotificationExpiration Posix
-    | SubmitForm
+    | SetValidatedField ( String, String )
     | UpdateFormField ( String, String ) FieldValue
 
 

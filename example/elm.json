@@ -17,7 +17,7 @@
             "elm/url": "1.0.0",
             "uncover-co/elm-submodules": "1.0.3",
             "uncover-co/elm-theme-spec": "3.0.2",
-            "uncover-co/elm-widgets-alpha": "4.0.0"
+            "uncover-co/elm-widgets-alpha": "6.0.0"
         },
         "indirect": {
             "elm/virtual-dom": "1.0.2"

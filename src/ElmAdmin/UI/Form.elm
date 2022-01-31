@@ -9,22 +9,57 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events as HE
 import Json.Decode as D
+import Set
 
 
-view : FormModel -> model -> params -> Form model msg params resource -> (model -> params -> resource -> msg) -> Html (Msg msg)
-view formModel model params form onSubmit =
+view :
+    { formModel : FormModel
+    , model : model
+    , params : params
+    , form : Form model msg params resource
+    , isLoading : Bool
+    , isHidden : Bool
+    , isReadOnly : Bool
+    , onSubmit : model -> params -> resource -> msg
+    }
+    -> Html (Msg msg)
+view props =
+    if props.isHidden then
+        text ""
+
+    else if props.isLoading then
+        viewLoading props.form
+
+    else
+        viewForm props
+
+
+viewForm :
+    { formModel : FormModel
+    , model : model
+    , params : params
+    , form : Form model msg params resource
+    , isLoading : Bool
+    , isHidden : Bool
+    , isReadOnly : Bool
+    , onSubmit : model -> params -> resource -> msg
+    }
+    -> Html (Msg msg)
+viewForm ({ formModel, model, params, form, onSubmit } as props) =
     form.resolver formModel model
         |> Maybe.map
-            (\resource ->
+            (\( resource, errors ) ->
                 Html.form
                     [ class "eadm eadm-card"
                     , HE.preventDefaultOn "submit"
                         ((\_ ->
-                            D.succeed
-                                (form.resolver formModel model
-                                    |> Maybe.map (GotMsg << onSubmit model params)
-                                    |> Maybe.withDefault DoNothing
-                                )
+                            if Dict.isEmpty errors then
+                                onSubmit model params resource
+                                    |> GotMsg
+                                    |> D.succeed
+
+                            else
+                                D.succeed DoNothing
                          )
                             |> D.lazy
                             |> D.map (\msg -> ( msg, True ))
@@ -44,10 +79,24 @@ view formModel model params form onSubmit =
                                                 params
                                                 resource
                                                 (\_ ->
-                                                    W.field []
+                                                    W.field
+                                                        [ Dict.get label errors
+                                                            |> Maybe.map
+                                                                (\err ->
+                                                                    if Set.member ( form.title, label ) formModel.validated then
+                                                                        WA.danger err
+
+                                                                    else
+                                                                        WA.none
+                                                                )
+                                                            |> Maybe.withDefault WA.none
+                                                        ]
                                                         { label = text label
                                                         , input =
-                                                            W.textInput [ WA.disabled (f.attrs.readOnly model params resource) ]
+                                                            W.textInput
+                                                                [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
+                                                                , WA.onBlur (SetValidatedField ( form.title, label ))
+                                                                ]
                                                                 { value = v
                                                                 , onInput =
                                                                     ElmAdmin.Internal.Form.FieldValueString
@@ -62,10 +111,20 @@ view formModel model params form onSubmit =
                                                 params
                                                 resource
                                                 (\_ ->
-                                                    W.field []
+                                                    W.field
+                                                        [ Dict.get label errors
+                                                            |> Maybe.map WA.danger
+                                                            |> Maybe.withDefault WA.none
+                                                        ]
                                                         { label = text label
                                                         , input =
-                                                            W.autocomplete [ WA.disabled (f.attrs.readOnly model params resource) ]
+                                                            W.autocomplete
+                                                                [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
+                                                                , WA.onBlur (SetValidatedField ( form.title, label ))
+                                                                , f.attrs.onEnter
+                                                                    |> Maybe.map (\fn -> WA.onEnter (GotMsg (fn search)))
+                                                                    |> Maybe.withDefault WA.none
+                                                                ]
                                                                 { id = label
                                                                 , search = search
                                                                 , value = value
@@ -76,9 +135,6 @@ view formModel model params form onSubmit =
                                                                         ( search_, value_ )
                                                                             |> ElmAdmin.Internal.Form.FieldValueAutocomplete
                                                                             |> UpdateFormField ( form.title, label )
-                                                                , onEnter =
-                                                                    f.attrs.onEnter
-                                                                        |> Maybe.map (\fn -> GotMsg (fn search))
                                                                 }
                                                         }
                                                 )
@@ -92,7 +148,9 @@ view formModel model params form onSubmit =
                                                     W.field []
                                                         { label = text label
                                                         , input =
-                                                            W.checkbox [ WA.disabled (f.attrs.readOnly model params resource) ]
+                                                            W.checkbox
+                                                                [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
+                                                                ]
                                                                 { value = v
                                                                 , onInput =
                                                                     ElmAdmin.Internal.Form.FieldValueBool
@@ -110,7 +168,9 @@ view formModel model params form onSubmit =
                                                     W.field []
                                                         { label = text label
                                                         , input =
-                                                            W.radioButtons [ WA.disabled (f.attrs.readOnly model params resource) ]
+                                                            W.radioButtons
+                                                                [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
+                                                                ]
                                                                 { value = v
                                                                 , options = f.options model
                                                                 , toLabel = identity
@@ -131,7 +191,9 @@ view formModel model params form onSubmit =
                                                     W.field []
                                                         { label = text label
                                                         , input =
-                                                            W.select [ WA.disabled (f.attrs.readOnly model params resource) ]
+                                                            W.select
+                                                                [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
+                                                                ]
                                                                 { value = v
                                                                 , options = f.options model
                                                                 , toLabel = identity
@@ -152,7 +214,9 @@ view formModel model params form onSubmit =
                                                     W.field []
                                                         { label = text label
                                                         , input =
-                                                            W.rangeInput [ WA.disabled (f.attrs.readOnly model params resource) ]
+                                                            W.rangeInput
+                                                                [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
+                                                                ]
                                                                 { value = v
                                                                 , min = f.min
                                                                 , max = f.max

@@ -21,7 +21,7 @@
         "elm/url": "1.0.0 <= v < 2.0.0",
         "uncover-co/elm-submodules": "1.0.2 <= v < 2.0.0",
         "uncover-co/elm-theme-spec": "3.0.2 <= v < 4.0.0",
-        "uncover-co/elm-widgets-alpha": "4.0.0 <= v < 5.0.0"
+        "uncover-co/elm-widgets-alpha": "6.0.0 <= v < 7.0.0"
     },
     "test-dependencies": {}
 }

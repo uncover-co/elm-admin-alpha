@@ -14,6 +14,7 @@ import Set exposing (Set)
 
 type alias FormModel =
     { initialized : Set String
+    , validated : Set ( String, String )
     , values : Dict ( String, String ) FieldValue
     }
 
@@ -32,7 +33,7 @@ type alias Form model msg params resource =
 type alias FormBuilder model msg params resource a =
     { title : String
     , fields : List ( String, Field model msg params resource )
-    , resolver : FormModel -> model -> Maybe a
+    , resolver : FormModel -> model -> Maybe ( a, Dict String String )
     }
 
 
@@ -94,6 +95,7 @@ initFields : resource -> Form msg model params resource -> FormModel -> FormMode
 initFields resource form_ formModel =
     { initialized =
         Set.insert form_.title formModel.initialized
+    , validated = formModel.validated
     , values =
         form_.fields
             |> List.map
@@ -131,5 +133,6 @@ initFields resource form_ formModel =
 empty : FormModel
 empty =
     { initialized = Set.empty
+    , validated = Set.empty
     , values = Dict.empty
     }

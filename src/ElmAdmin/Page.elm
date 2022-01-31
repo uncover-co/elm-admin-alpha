@@ -5,6 +5,7 @@ module ElmAdmin.Page exposing
     , card, form, list
     , params, oneParam, customParam
     , parsedParams, paramsParser, path, query, queryList, custom, ParamsParser
+    , hidden, loading, readOnly
     )
 
 {-|
@@ -254,9 +255,18 @@ card =
 
 
 {-| -}
+type alias FormAttributes model params =
+    { hidden : model -> params -> Bool
+    , loading : model -> params -> Bool
+    , readOnly : model -> params -> Bool
+    }
+
+
+{-| -}
 form :
     { init : model -> params -> Maybe resource
     , form : ElmAdmin.Form.Form model msg params resource
+    , attrs : List (FormAttributes model params -> FormAttributes model params)
     , onSubmit : model -> params -> resource -> msg
     }
     -> Page model msg params
@@ -282,3 +292,25 @@ list :
     -> Page model msg params
 list =
     ElmAdmin.Internal.Page.list
+
+
+
+-- Attributes
+
+
+{-| -}
+hidden : (model -> params -> Bool) -> { a | hidden : model -> params -> Bool } -> { a | hidden : model -> params -> Bool }
+hidden v a =
+    { a | hidden = v }
+
+
+{-| -}
+loading : (model -> params -> Bool) -> { a | loading : model -> params -> Bool } -> { a | loading : model -> params -> Bool }
+loading v a =
+    { a | loading = v }
+
+
+{-| -}
+readOnly : (model -> params -> Bool) -> { a | readOnly : model -> params -> Bool } -> { a | readOnly : model -> params -> Bool }
+readOnly v a =
+    { a | readOnly = v }
