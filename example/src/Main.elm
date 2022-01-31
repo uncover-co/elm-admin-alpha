@@ -149,7 +149,7 @@ pageSignIn =
     AP.page "Sign In"
         |> AP.form
             { init = \_ _ -> Just emptyUser
-            , onSubmit = SignIn
+            , onSubmit = \_ _ -> SignIn
             , form =
                 AF.form "Create User"
                     User
@@ -162,7 +162,7 @@ pagePosts =
     AP.page "Posts"
         |> AP.form
             { init = \_ _ -> Just emptyPostForm
-            , onSubmit = CreatePost
+            , onSubmit = \_ _ -> CreatePost
             , form =
                 AF.form "Create Post" PostForm
                     |> AF.text "Title" .title []
@@ -175,14 +175,14 @@ pagePosts =
                         }
                     |> AF.text "Author Nickname"
                         .authorNickname
-                        [ AF.hidden (\_ _ f -> f.author == Nothing)
+                        [ AF.hiddenIf (\_ _ f -> f.author == Nothing)
                         ]
                     |> AF.select
                         { label = "Is Published"
                         , value = .published
                         , optionToLabel = publishedToString
                         , options = \_ -> [ Published, NotPublished ]
-                        , attrs = []
+                        , attrs = [ AF.readOnly ]
                         }
                     |> AF.range
                         { label = "Age"

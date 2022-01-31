@@ -41,7 +41,8 @@ type Field model msg params resource
         { value : resource -> String
         , attrs :
             { required : Bool
-            , hidden : Maybe (model -> params -> resource -> Bool)
+            , hidden : model -> params -> resource -> Bool
+            , readOnly : model -> params -> resource -> Bool
             }
         }
     | Autocomplete
@@ -49,28 +50,32 @@ type Field model msg params resource
         , options : model -> Maybe (List String)
         , attrs :
             { required : Bool
-            , hidden : Maybe (model -> params -> resource -> Bool)
+            , hidden : model -> params -> resource -> Bool
+            , readOnly : model -> params -> resource -> Bool
             , onEnter : Maybe (String -> msg)
             }
         }
     | Checkbox
         { value : resource -> Bool
         , attrs :
-            { hidden : Maybe (model -> params -> resource -> Bool)
+            { hidden : model -> params -> resource -> Bool
+            , readOnly : model -> params -> resource -> Bool
             }
         }
     | Select
         { value : resource -> String
         , options : model -> List String
         , attrs :
-            { hidden : Maybe (model -> params -> resource -> Bool)
+            { hidden : model -> params -> resource -> Bool
+            , readOnly : model -> params -> resource -> Bool
             }
         }
     | Radio
         { value : resource -> String
         , options : model -> List String
         , attrs :
-            { hidden : Maybe (model -> params -> resource -> Bool)
+            { hidden : model -> params -> resource -> Bool
+            , readOnly : model -> params -> resource -> Bool
             }
         }
     | Range
@@ -79,7 +84,8 @@ type Field model msg params resource
         , max : Float
         , step : Float
         , attrs :
-            { hidden : Maybe (model -> params -> resource -> Bool)
+            { hidden : model -> params -> resource -> Bool
+            , readOnly : model -> params -> resource -> Bool
             }
         }
 

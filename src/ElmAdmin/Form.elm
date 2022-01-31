@@ -7,6 +7,7 @@ module ElmAdmin.Form exposing
     , select, SelectAttributes
     , range, RangeAttributes
     , required, hidden
+    , hiddenIf, readOnly, readOnlyIf
     )
 
 {-|
@@ -84,14 +85,16 @@ form title a =
 {-| -}
 type alias TextAttributes model params resource =
     { required : Bool
-    , hidden : Maybe (model -> params -> resource -> Bool)
+    , hidden : model -> params -> resource -> Bool
+    , readOnly : model -> params -> resource -> Bool
     }
 
 
 textDefaults : TextAttributes model params resource
 textDefaults =
     { required = True
-    , hidden = Nothing
+    , hidden = \_ _ _ -> False
+    , readOnly = \_ _ _ -> False
     }
 
 
@@ -138,7 +141,8 @@ text label value attrs_ f =
 {-| -}
 type alias AutocompleteAttributes model msg params resource =
     { required : Bool
-    , hidden : Maybe (model -> params -> resource -> Bool)
+    , hidden : model -> params -> resource -> Bool
+    , readOnly : model -> params -> resource -> Bool
     , onEnter : Maybe (String -> msg)
     }
 
@@ -146,7 +150,8 @@ type alias AutocompleteAttributes model msg params resource =
 autocompleteDefaults : AutocompleteAttributes model msg params resource
 autocompleteDefaults =
     { required = False
-    , hidden = Nothing
+    , hidden = \_ _ _ -> False
+    , readOnly = \_ _ _ -> False
     , onEnter = Nothing
     }
 
@@ -219,13 +224,15 @@ autocomplete props f =
 
 {-| -}
 type alias CheckboxAttributes model params resource =
-    { hidden : Maybe (model -> params -> resource -> Bool)
+    { hidden : model -> params -> resource -> Bool
+    , readOnly : model -> params -> resource -> Bool
     }
 
 
 checkboxDefaults : CheckboxAttributes model params resource
 checkboxDefaults =
-    { hidden = Nothing
+    { hidden = \_ _ _ -> False
+    , readOnly = \_ _ _ -> False
     }
 
 
@@ -271,13 +278,15 @@ checkbox label value attrs_ f =
 
 {-| -}
 type alias RadioAttributes model params resource =
-    { hidden : Maybe (model -> params -> resource -> Bool)
+    { hidden : model -> params -> resource -> Bool
+    , readOnly : model -> params -> resource -> Bool
     }
 
 
 radioDefaults : RadioAttributes model params resource
 radioDefaults =
-    { hidden = Nothing
+    { hidden = \_ _ _ -> False
+    , readOnly = \_ _ _ -> False
     }
 
 
@@ -330,13 +339,15 @@ radio props f =
 
 {-| -}
 type alias SelectAttributes model params resource =
-    { hidden : Maybe (model -> params -> resource -> Bool)
+    { hidden : model -> params -> resource -> Bool
+    , readOnly : model -> params -> resource -> Bool
     }
 
 
 selectDefaults : SelectAttributes model params resource
 selectDefaults =
-    { hidden = Nothing
+    { hidden = \_ _ _ -> False
+    , readOnly = \_ _ _ -> False
     }
 
 
@@ -389,13 +400,15 @@ select props f =
 
 {-| -}
 type alias RangeAttributes model params resource =
-    { hidden : Maybe (model -> params -> resource -> Bool)
+    { hidden : model -> params -> resource -> Bool
+    , readOnly : model -> params -> resource -> Bool
     }
 
 
 rangeDefaults : RangeAttributes model params resource
 rangeDefaults =
-    { hidden = Nothing
+    { hidden = \_ _ _ -> False
+    , readOnly = \_ _ _ -> False
     }
 
 
@@ -447,12 +460,37 @@ range props f =
 
 
 {-| -}
-hidden :
+hiddenIf :
     (model -> params -> resource -> Bool)
-    -> { m | hidden : Maybe (model -> params -> resource -> Bool) }
-    -> { m | hidden : Maybe (model -> params -> resource -> Bool) }
-hidden v a =
-    { a | hidden = Just v }
+    -> { m | hidden : model -> params -> resource -> Bool }
+    -> { m | hidden : model -> params -> resource -> Bool }
+hiddenIf v a =
+    { a | hidden = v }
+
+
+{-| -}
+hidden :
+    { m | hidden : model -> params -> resource -> Bool }
+    -> { m | hidden : model -> params -> resource -> Bool }
+hidden a =
+    { a | hidden = \_ _ _ -> True }
+
+
+{-| -}
+readOnlyIf :
+    (model -> params -> resource -> Bool)
+    -> { m | readOnly : model -> params -> resource -> Bool }
+    -> { m | readOnly : model -> params -> resource -> Bool }
+readOnlyIf v a =
+    { a | readOnly = v }
+
+
+{-| -}
+readOnly :
+    { m | readOnly : model -> params -> resource -> Bool }
+    -> { m | readOnly : model -> params -> resource -> Bool }
+readOnly a =
+    { a | readOnly = \_ _ _ -> True }
 
 
 {-| -}
