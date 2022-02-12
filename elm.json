@@ -1,27 +1,27 @@
 {
-  "type": "package",
-  "name": "uncover-co/elm-admin-alpha",
-  "summary": "A framework for building admin applications themed through ThemeSpec.",
-  "license": "MPL-2.0",
-  "version": "9.0.0",
-  "exposed-modules": [
-    "ElmAdmin",
-    "ElmAdmin.Page",
-    "ElmAdmin.Form",
-    "ElmAdmin.Actions"
-  ],
-  "elm-version": "0.19.0 <= v < 0.20.0",
-  "dependencies": {
-    "elm/browser": "1.0.0 <= v < 2.0.0",
-    "elm/core": "1.0.0 <= v < 2.0.0",
-    "elm/html": "1.0.0 <= v < 2.0.0",
-    "elm/json": "1.0.0 <= v < 2.0.0",
-    "elm/svg": "1.0.1 <= v < 2.0.0",
-    "elm/time": "1.0.0 <= v < 2.0.0",
-    "elm/url": "1.0.0 <= v < 2.0.0",
-    "uncover-co/elm-submodules": "1.0.2 <= v < 2.0.0",
-    "uncover-co/elm-theme-spec": "3.0.2 <= v < 4.0.0",
-    "uncover-co/elm-widgets-alpha": "7.0.2 <= v < 8.0.0"
-  },
-  "test-dependencies": {}
+    "type": "package",
+    "name": "uncover-co/elm-admin-alpha",
+    "summary": "A framework for building admin applications themed through ThemeSpec.",
+    "license": "MPL-2.0",
+    "version": "10.0.0",
+    "exposed-modules": [
+        "ElmAdmin",
+        "ElmAdmin.Page",
+        "ElmAdmin.Form",
+        "ElmAdmin.Actions"
+    ],
+    "elm-version": "0.19.0 <= v < 0.20.0",
+    "dependencies": {
+        "elm/browser": "1.0.0 <= v < 2.0.0",
+        "elm/core": "1.0.0 <= v < 2.0.0",
+        "elm/html": "1.0.0 <= v < 2.0.0",
+        "elm/json": "1.0.0 <= v < 2.0.0",
+        "elm/svg": "1.0.1 <= v < 2.0.0",
+        "elm/time": "1.0.0 <= v < 2.0.0",
+        "elm/url": "1.0.0 <= v < 2.0.0",
+        "uncover-co/elm-submodules": "1.0.2 <= v < 2.0.0",
+        "uncover-co/elm-theme-spec": "3.0.2 <= v < 4.0.0",
+        "uncover-co/elm-widgets-alpha": "7.0.2 <= v < 8.0.0"
+    },
+    "test-dependencies": {}
 }

@@ -6,8 +6,7 @@ module ElmAdmin.Form exposing
     , radio, RadioAttributes
     , select, SelectAttributes
     , range, RangeAttributes
-    , required, hidden
-    , hiddenIf, onEnter, onSearch, readOnly, readOnlyIf
+    , readOnly, readOnlyIf, required, hidden, hiddenIf, onEnter, onSearch
     )
 
 {-|
@@ -50,7 +49,7 @@ module ElmAdmin.Form exposing
 
 # Attributes
 
-@docs required, hidden
+@docs readOnly, readOnlyIf, required, hidden, hiddenIf, onEnter, onSearch
 
 -}
 

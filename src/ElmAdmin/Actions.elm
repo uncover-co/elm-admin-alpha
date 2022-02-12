@@ -1,8 +1,7 @@
 module ElmAdmin.Actions exposing
     ( cmd, none, batch, Action
     , showNotification, showHighlightNotification, showSuccessNotification, showWarningNotification, showDangerNotification
-    , initForm
-    , debounce
+    , initForm, debounce
     )
 
 {-| Actions are a especial kind of `Cmd` that can be used to trigger both your usual commands as well as especial ones used by ElmAdmin.
@@ -57,7 +56,7 @@ You can trigger a notification popup from anywhere in your application through o
 
 # Form
 
-@docs initForm
+@docs initForm, debounce
 
 -}
 
@@ -141,10 +140,8 @@ initForm form resource =
         |> SubCmd.effect
 
 
-
-{- Debounce a message passing a string as a debounce key and a wait time in milliseconds. -}
-
-
+{-| Debounce a message passing a string as a debounce key and a wait time in milliseconds.
+-}
 debounce : String -> Int -> msg -> Action msg
 debounce k wait msg =
     Debounce k wait (GotMsg msg)

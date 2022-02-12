@@ -1,11 +1,10 @@
 module ElmAdmin.Page exposing
-    ( page, title, nav, Page
+    ( page, title, nav, hidden, loading, readOnly, Page
     , init, update, subscriptions, view
     , initWithActions, updateWithActions
     , card, form, list
     , params, oneParam, customParam
     , parsedParams, paramsParser, path, query, queryList, custom, ParamsParser
-    , hidden, loading, readOnly
     )
 
 {-|
@@ -13,7 +12,7 @@ module ElmAdmin.Page exposing
 
 ## Setup
 
-@docs page, title, nav, Page
+@docs page, title, nav, hidden, loading, readOnly, Page
 
 
 ## Elm Architecture
