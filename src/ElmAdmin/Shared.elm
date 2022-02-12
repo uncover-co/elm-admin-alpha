@@ -8,6 +8,7 @@ module ElmAdmin.Shared exposing
 
 import Browser exposing (UrlRequest)
 import Browser.Navigation
+import Dict exposing (Dict)
 import ElmAdmin.Internal.Form exposing (FieldValue, FormModel)
 import ElmAdmin.Router exposing (RouteParams)
 import ElmAdmin.UI.Notification exposing (NotificationStatus)
@@ -28,6 +29,7 @@ type alias Model model msg =
     , routeParams : RouteParams
     , darkMode : Bool
     , formModel : FormModel
+    , debounced : Dict String ( Posix, Msg msg )
     , notification :
         Maybe
             { id : Int
@@ -40,6 +42,7 @@ type alias Model model msg =
 
 type Msg msg
     = DoNothing
+    | Batch (List (Msg msg))
     | ToggleDarkMode
     | OnUrlRequest UrlRequest
     | OnUrlChange Url
@@ -49,11 +52,14 @@ type Msg msg
     | SetNotificationExpiration Posix
     | SetValidatedField ( String, String )
     | UpdateFormField ( String, String ) FieldValue
+    | SetDebounce String Posix (Msg msg)
+    | UpdateDebounced Posix
 
 
 type Effect msg
     = UpdateFormModel (FormModel -> FormModel)
     | ShowNotification NotificationStatus (Html msg)
+    | Debounce String Int (Msg msg)
 
 
 type alias Action msg =

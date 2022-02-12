@@ -7,7 +7,7 @@ module ElmAdmin.Form exposing
     , select, SelectAttributes
     , range, RangeAttributes
     , required, hidden
-    , hiddenIf, readOnly, readOnlyIf
+    , hiddenIf, onEnter, onSearch, readOnly, readOnlyIf
     )
 
 {-|
@@ -148,6 +148,7 @@ type alias AutocompleteAttributes model msg params resource =
     , hidden : model -> params -> resource -> Bool
     , readOnly : model -> params -> resource -> Bool
     , onEnter : Maybe (String -> msg)
+    , onSearch : Maybe (String -> msg)
     }
 
 
@@ -157,6 +158,7 @@ autocompleteDefaults =
     , hidden = \_ _ _ -> False
     , readOnly = \_ _ _ -> False
     , onEnter = Nothing
+    , onSearch = Nothing
     }
 
 
@@ -510,3 +512,15 @@ required :
     -> { m | required : Bool }
 required a =
     { a | required = True }
+
+
+{-| -}
+onEnter : (String -> msg) -> { m | onEnter : Maybe (String -> msg) } -> { m | onEnter : Maybe (String -> msg) }
+onEnter v a =
+    { a | onEnter = Just v }
+
+
+{-| -}
+onSearch : (String -> msg) -> { m | onSearch : Maybe (String -> msg) } -> { m | onSearch : Maybe (String -> msg) }
+onSearch v a =
+    { a | onSearch = Just v }

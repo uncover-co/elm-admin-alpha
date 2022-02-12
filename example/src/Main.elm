@@ -1,10 +1,12 @@
 module Main exposing (main)
 
 import ElmAdmin as A exposing (ElmAdmin, admin)
+import ElmAdmin.Actions as AA
 import ElmAdmin.Form as AF
 import ElmAdmin.Page as AP
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Set exposing (Set)
 
 
 
@@ -20,6 +22,8 @@ type alias SignedInModel =
     { user : User
     , users : List User
     , posts : List Post
+    , nicknames : Set String
+    , validNicknames : Maybe (List String)
     }
 
 
@@ -57,9 +61,12 @@ emptyUser =
 type Msg
     = SignIn User
     | CreatePost PostForm
+    | SearchNicknames String
+    | SearchNicknamesResponse String
+    | AddNicknameOption String
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
+update : Msg -> Model -> ( Model, AA.Action Msg )
 update msg model =
     case model of
         SignedIn m ->
@@ -73,27 +80,61 @@ update msg model =
                         { user = user
                         , users = [ user ]
                         , posts = []
+                        , nicknames = Set.fromList [ "Georges", "Boris", "Elmhead" ]
+                        , validNicknames = Just []
                         }
-                    , Cmd.none
+                    , AA.none
                     )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, AA.none )
 
 
-signedInUpdate : Msg -> SignedInModel -> ( SignedInModel, Cmd Msg )
+signedInUpdate : Msg -> SignedInModel -> ( SignedInModel, AA.Action Msg )
 signedInUpdate msg model =
     case msg of
         CreatePost postForm ->
             case postForm.author of
                 Just author ->
-                    ( { model | posts = { title = postForm.title, author = author } :: model.posts }, Cmd.none )
+                    ( { model | posts = { title = postForm.title, author = author } :: model.posts }, AA.none )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( model, AA.none )
+
+        SearchNicknames v ->
+            ( { model | validNicknames = model.validNicknames }
+            , AA.debounce "search-nicknames" 200 (SearchNicknamesResponse v)
+            )
+
+        SearchNicknamesResponse v ->
+            ( { model
+                | validNicknames =
+                    model.nicknames
+                        |> Set.filter (\s -> String.startsWith v s)
+                        |> Set.toList
+                        |> Just
+              }
+            , AA.none
+            )
+
+        AddNicknameOption v ->
+            let
+                nicknames =
+                    Set.insert v model.nicknames
+            in
+            ( { model
+                | nicknames = nicknames
+                , validNicknames =
+                    nicknames
+                        |> Set.filter (\s -> String.startsWith v s)
+                        |> Set.toList
+                        |> Just
+              }
+            , AA.none
+            )
 
         _ ->
-            ( model, Cmd.none )
+            ( model, AA.none )
 
 
 type Published
@@ -114,7 +155,7 @@ publishedToString p =
 type alias PostForm =
     { title : String
     , author : Maybe User
-    , authorNickname : String
+    , authorNickname : Maybe String
     , published : Published
     , age : Float
     }
@@ -124,7 +165,7 @@ emptyPostForm : PostForm
 emptyPostForm =
     { title = ""
     , author = Nothing
-    , authorNickname = ""
+    , authorNickname = Nothing
     , published = NotPublished
     , age = 20.0
     }
@@ -175,10 +216,17 @@ pagePosts =
                         , optionToLabel = .name
                         , attrs = []
                         }
-                    |> AF.text "Author Nickname"
-                        .authorNickname
-                        [ AF.hiddenIf (\_ _ f -> f.author == Nothing)
-                        ]
+                    |> AF.autocomplete
+                        { label = "Author Nickname"
+                        , value = .authorNickname
+                        , options = \model -> model.validNicknames
+                        , optionToLabel = identity
+                        , attrs =
+                            [ AF.onSearch SearchNicknames
+                            , AF.onEnter AddNicknameOption
+                            , AF.required
+                            ]
+                        }
                     |> AF.select
                         { label = "Is Published"
                         , value = .published
@@ -192,7 +240,7 @@ pagePosts =
                         , min = 18
                         , max = 90
                         , step = 1
-                        , attrs = []
+                        , attrs = [ AF.readOnly ]
                         }
             }
         |> AP.list
@@ -209,9 +257,9 @@ pagePosts =
 
 main : ElmAdmin () Model Msg
 main =
-    admin
+    A.adminWithActions
         { title = "Admin"
-        , init = \_ _ -> ( SignedOut, Cmd.none )
+        , init = \_ _ -> ( SignedOut, AA.none )
         , update = \_ -> update
         , subscriptions = \_ _ -> Sub.none
         }

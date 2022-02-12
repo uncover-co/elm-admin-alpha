@@ -9,7 +9,7 @@ module ElmAdmin.Application exposing
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation
 import Dict exposing (Dict)
-import ElmAdmin.Internal.Form
+import ElmAdmin.Internal.Form exposing (FieldValue(..))
 import ElmAdmin.Internal.Page exposing (Route)
 import ElmAdmin.Router exposing (RouteParams)
 import ElmAdmin.Shared exposing (Action, Effect(..), Model, Msg(..))
@@ -25,7 +25,7 @@ import Set
 import SubModule
 import Task
 import ThemeSpec
-import Time
+import Time exposing (Posix)
 import Url exposing (Url)
 
 
@@ -182,6 +182,7 @@ init props flags url navKey =
               , model = routeInit.model
               , formModel = initialFormModel
               , routeParams = routeInit.routeParams
+              , debounced = Dict.empty
               , notification = Nothing
               , darkMode = props.preferDarkMode
               }
@@ -195,6 +196,7 @@ init props flags url navKey =
               , model = initialModel
               , formModel = initialFormModel
               , routeParams = ElmAdmin.Router.emptyRouteParams
+              , debounced = Dict.empty
               , notification = Nothing
               , darkMode = props.preferDarkMode
               }
@@ -214,6 +216,7 @@ initError initModel flags _ key =
     ( { navKey = key
       , model = initModel flags key |> Tuple.first
       , routeParams = ElmAdmin.Router.emptyRouteParams
+      , debounced = Dict.empty
       , notification = Nothing
       , darkMode = True
       , formModel = ElmAdmin.Internal.Form.empty
@@ -395,6 +398,15 @@ update props msg model =
                         Time.now
                     )
 
+                Debounce key wait msg_ ->
+                    ( model
+                    , Task.perform
+                        (\posix ->
+                            SetDebounce key (Time.millisToPosix (Time.posixToMillis posix + wait)) msg_
+                        )
+                        Time.now
+                    )
+
         SetValidatedField id ->
             let
                 formModel =
@@ -423,6 +435,49 @@ update props msg model =
             , Cmd.none
             )
 
+        Batch msgList ->
+            msgList
+                |> List.foldl
+                    (\msg_ ( model_, cmd ) ->
+                        update props msg_ model_
+                            |> Tuple.mapSecond (\cmd_ -> Cmd.batch [ cmd, cmd_ ])
+                    )
+                    ( model, Cmd.none )
+
+        SetDebounce key posix msg_ ->
+            ( { model
+                | debounced =
+                    Dict.insert
+                        key
+                        ( posix, msg_ )
+                        model.debounced
+              }
+            , Cmd.none
+            )
+
+        UpdateDebounced now_ ->
+            let
+                now : Int
+                now =
+                    Time.posixToMillis now_
+
+                triggered : Dict String ( Posix, Msg msg )
+                triggered =
+                    model.debounced
+                        |> Dict.filter (\_ ( t, _ ) -> Time.posixToMillis t <= now)
+
+                remaining =
+                    Dict.diff model.debounced triggered
+            in
+            triggered
+                |> Dict.values
+                |> List.foldl
+                    (\( _, msg_ ) ( model_, cmd ) ->
+                        update props msg_ model_
+                            |> Tuple.mapSecond (\cmd_ -> Cmd.batch [ cmd, cmd_ ])
+                    )
+                    ( { model | debounced = remaining }, Cmd.none )
+
 
 subscriptions :
     { subscriptions : RouteParams -> model -> Sub msg
@@ -449,6 +504,13 @@ subscriptions props model =
                         |> Maybe.map (\r -> r.route.page.subscriptions model.routeParams model.model)
                         |> Maybe.withDefault Sub.none
 
+        debouncedSubscriptions =
+            if Dict.isEmpty model.debounced then
+                Sub.none
+
+            else
+                Time.every 200 UpdateDebounced
+
         notificationSubscriptions =
             if model.notification /= Nothing then
                 Time.every 1000 HideNotification
@@ -460,6 +522,7 @@ subscriptions props model =
         [ props.subscriptions model.routeParams model.model |> Sub.map GotMsg
         , activePageSubscriptions
         , notificationSubscriptions
+        , debouncedSubscriptions
         ]
 
 

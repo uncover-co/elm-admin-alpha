@@ -132,9 +132,19 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                                 , toLabel = identity
                                                                 , onInput =
                                                                     \search_ value_ ->
-                                                                        ( search_, value_ )
-                                                                            |> ElmAdmin.Internal.Form.FieldValueAutocomplete
-                                                                            |> UpdateFormField ( form.title, label )
+                                                                        case f.attrs.onSearch of
+                                                                            Just onSearch ->
+                                                                                Batch
+                                                                                    [ ( search_, value_ )
+                                                                                        |> ElmAdmin.Internal.Form.FieldValueAutocomplete
+                                                                                        |> UpdateFormField ( form.title, label )
+                                                                                    , GotMsg (onSearch search_)
+                                                                                    ]
+
+                                                                            Nothing ->
+                                                                                ( search_, value_ )
+                                                                                    |> ElmAdmin.Internal.Form.FieldValueAutocomplete
+                                                                                    |> UpdateFormField ( form.title, label )
                                                                 }
                                                         }
                                                 )
@@ -171,7 +181,8 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                             W.radioButtons
                                                                 [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
                                                                 ]
-                                                                { value = v
+                                                                { id = form.title ++ "-" ++ label
+                                                                , value = v
                                                                 , options = f.options model
                                                                 , toLabel = identity
                                                                 , toValue = identity
