@@ -46,7 +46,7 @@ viewForm :
     }
     -> Html (Msg msg)
 viewForm ({ formModel, model, params, form, onSubmit } as props) =
-    form.resolver formModel model
+    form.resolver formModel model params
         |> Maybe.map
             (\( resource, errors ) ->
                 Html.form
@@ -128,7 +128,7 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                                 { id = label
                                                                 , search = search
                                                                 , value = value
-                                                                , options = f.options model
+                                                                , options = f.options model params
                                                                 , toLabel = identity
                                                                 , onInput =
                                                                     \search_ value_ ->
@@ -183,7 +183,7 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                                 ]
                                                                 { id = form.title ++ "-" ++ label
                                                                 , value = v
-                                                                , options = f.options model
+                                                                , options = f.options model params
                                                                 , toLabel = identity
                                                                 , toValue = identity
                                                                 , onInput =
@@ -206,7 +206,7 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                                 [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
                                                                 ]
                                                                 { value = v
-                                                                , options = f.options model
+                                                                , options = f.options model params
                                                                 , toLabel = identity
                                                                 , toValue = identity
                                                                 , onInput =

@@ -73,7 +73,7 @@ form : String -> a -> FormBuilder model msg params resource a
 form title a =
     { title = title
     , fields = []
-    , resolver = \_ _ -> Just ( a, Dict.empty )
+    , resolver = \_ _ _ -> Just ( a, Dict.empty )
     }
 
 
@@ -119,8 +119,8 @@ text label value attrs_ f =
         )
             :: f.fields
     , resolver =
-        \formModel model ->
-            f.resolver formModel model
+        \formModel model params ->
+            f.resolver formModel model params
                 |> Maybe.andThen
                     (\( resolver, errors ) ->
                         case Dict.get ( f.title, label ) formModel.values of
@@ -165,7 +165,7 @@ autocompleteDefaults =
 autocomplete :
     { label : String
     , value : resource -> Maybe x
-    , options : model -> Maybe (List x)
+    , options : model -> params -> Maybe (List x)
     , optionToLabel : x -> String
     , attrs : List (AutocompleteAttributes model msg params resource -> AutocompleteAttributes model msg params resource)
     }
@@ -182,9 +182,9 @@ autocomplete props f =
             props.value resource
                 |> Maybe.map props.optionToLabel
 
-        options : model -> Maybe (List String)
-        options model =
-            props.options model
+        options : model -> params -> Maybe (List String)
+        options model params =
+            props.options model params
                 |> Maybe.map (List.map props.optionToLabel)
     in
     { title = f.title
@@ -198,15 +198,15 @@ autocomplete props f =
         )
             :: f.fields
     , resolver =
-        \formModel model ->
-            f.resolver formModel model
+        \formModel model params ->
+            f.resolver formModel model params
                 |> Maybe.andThen
                     (\( resolver, errors ) ->
                         case Dict.get ( f.title, props.label ) formModel.values of
                             Just (FieldValueAutocomplete ( _, v )) ->
                                 let
                                     value_ =
-                                        case ( v, props.options model ) of
+                                        case ( v, props.options model params ) of
                                             ( Just v_, Just options_ ) ->
                                                 ElmAdmin.Libs.List.find
                                                     (\option -> props.optionToLabel option == v_)
@@ -270,8 +270,8 @@ checkbox label value attrs_ f =
         )
             :: f.fields
     , resolver =
-        \formModel model ->
-            f.resolver formModel model
+        \formModel model params ->
+            f.resolver formModel model params
                 |> Maybe.andThen
                     (\( resolver, errors ) ->
                         case Dict.get ( f.title, label ) formModel.values of
@@ -306,7 +306,7 @@ radioDefaults =
 radio :
     { label : String
     , value : resource -> x
-    , options : model -> List x
+    , options : model -> params -> List x
     , optionToLabel : x -> String
     , attrs : List (RadioAttributes model params resource -> RadioAttributes model params resource)
     }
@@ -322,19 +322,19 @@ radio props f =
         ( props.label
         , Radio
             { value = props.value >> props.optionToLabel
-            , options = props.options >> List.map props.optionToLabel
+            , options = \model params -> props.options model params |> List.map props.optionToLabel
             , attrs = attrs
             }
         )
             :: f.fields
     , resolver =
-        \formModel model ->
-            f.resolver formModel model
+        \formModel model params ->
+            f.resolver formModel model params
                 |> Maybe.andThen
                     (\( resolver, errors ) ->
                         case Dict.get ( f.title, props.label ) formModel.values of
                             Just (FieldValueString v) ->
-                                props.options model
+                                props.options model params
                                     |> ElmAdmin.Libs.List.find
                                         (\option -> props.optionToLabel option == v)
                                     |> Maybe.map (\v_ -> ( resolver v_, errors ))
@@ -367,7 +367,7 @@ selectDefaults =
 select :
     { label : String
     , value : resource -> x
-    , options : model -> List x
+    , options : model -> params -> List x
     , optionToLabel : x -> String
     , attrs : List (SelectAttributes model params resource -> SelectAttributes model params resource)
     }
@@ -383,19 +383,19 @@ select props f =
         ( props.label
         , Select
             { value = props.value >> props.optionToLabel
-            , options = props.options >> List.map props.optionToLabel
+            , options = \model params -> props.options model params |> List.map props.optionToLabel
             , attrs = attrs
             }
         )
             :: f.fields
     , resolver =
-        \formModel model ->
-            f.resolver formModel model
+        \formModel model params ->
+            f.resolver formModel model params
                 |> Maybe.andThen
                     (\( resolver, errors ) ->
                         case Dict.get ( f.title, props.label ) formModel.values of
                             Just (FieldValueString v) ->
-                                props.options model
+                                props.options model params
                                     |> ElmAdmin.Libs.List.find
                                         (\option -> props.optionToLabel option == v)
                                     |> Maybe.map (\v_ -> ( resolver v_, errors ))
@@ -453,8 +453,8 @@ range props f =
         )
             :: f.fields
     , resolver =
-        \formModel model ->
-            f.resolver formModel model
+        \formModel model params ->
+            f.resolver formModel model params
                 |> Maybe.andThen
                     (\( resolver, errors ) ->
                         case Dict.get ( f.title, props.label ) formModel.values of

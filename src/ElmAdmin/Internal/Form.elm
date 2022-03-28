@@ -33,7 +33,7 @@ type alias Form model msg params resource =
 type alias FormBuilder model msg params resource a =
     { title : String
     , fields : List ( String, Field model msg params resource )
-    , resolver : FormModel -> model -> Maybe ( a, Dict String String )
+    , resolver : FormModel -> model -> params -> Maybe ( a, Dict String String )
     }
 
 
@@ -48,7 +48,7 @@ type Field model msg params resource
         }
     | Autocomplete
         { value : resource -> Maybe String
-        , options : model -> Maybe (List String)
+        , options : model -> params -> Maybe (List String)
         , attrs :
             { required : Bool
             , hidden : model -> params -> resource -> Bool
@@ -66,7 +66,7 @@ type Field model msg params resource
         }
     | Select
         { value : resource -> String
-        , options : model -> List String
+        , options : model -> params -> List String
         , attrs :
             { hidden : model -> params -> resource -> Bool
             , readOnly : model -> params -> resource -> Bool
@@ -74,7 +74,7 @@ type Field model msg params resource
         }
     | Radio
         { value : resource -> String
-        , options : model -> List String
+        , options : model -> params -> List String
         , attrs :
             { hidden : model -> params -> resource -> Bool
             , readOnly : model -> params -> resource -> Bool
