@@ -146,8 +146,8 @@ type alias AutocompleteAttributes model msg params resource =
     { required : Bool
     , hidden : model -> params -> resource -> Bool
     , readOnly : model -> params -> resource -> Bool
-    , onEnter : Maybe (String -> msg)
-    , onSearch : Maybe (resource -> String -> msg)
+    , onEnter : Maybe (model -> params -> resource -> String -> msg)
+    , onSearch : Maybe (model -> params -> resource -> String -> msg)
     }
 
 
@@ -514,12 +514,12 @@ required a =
 
 
 {-| -}
-onEnter : (String -> msg) -> { m | onEnter : Maybe (String -> msg) } -> { m | onEnter : Maybe (String -> msg) }
+onEnter : (model -> params -> resource -> String -> msg) -> { m | onEnter : Maybe (model -> params -> resource -> String -> msg) } -> { m | onEnter : Maybe (model -> params -> resource -> String -> msg) }
 onEnter v a =
     { a | onEnter = Just v }
 
 
 {-| -}
-onSearch : (resource -> String -> msg) -> { m | onSearch : Maybe (resource -> String -> msg) } -> { m | onSearch : Maybe (resource -> String -> msg) }
+onSearch : (model -> params -> resource -> String -> msg) -> { m | onSearch : Maybe (model -> params -> resource -> String -> msg) } -> { m | onSearch : Maybe (model -> params -> resource -> String -> msg) }
 onSearch v a =
     { a | onSearch = Just v }

@@ -122,7 +122,7 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                                 [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
                                                                 , WA.onBlur (SetValidatedField ( form.title, label ))
                                                                 , f.attrs.onEnter
-                                                                    |> Maybe.map (\fn -> WA.onEnter (GotMsg (fn search)))
+                                                                    |> Maybe.map (\fn -> WA.onEnter (GotMsg (fn model params resource search)))
                                                                     |> Maybe.withDefault WA.none
                                                                 ]
                                                                 { id = label
@@ -138,7 +138,7 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                                                     [ ( search_, value_ )
                                                                                         |> ElmAdmin.Internal.Form.FieldValueAutocomplete
                                                                                         |> UpdateFormField ( form.title, label )
-                                                                                    , GotMsg (onSearch resource search_)
+                                                                                    , GotMsg (onSearch model params resource search_)
                                                                                     ]
 
                                                                             Nothing ->

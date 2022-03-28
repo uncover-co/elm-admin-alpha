@@ -1,6 +1,6 @@
 module Main exposing (main)
 
-import ElmAdmin as A exposing (ElmAdmin, admin)
+import ElmAdmin as A exposing (ElmAdmin)
 import ElmAdmin.Actions as AA
 import ElmAdmin.Form as AF
 import ElmAdmin.Page as AP
@@ -222,8 +222,8 @@ pagePosts =
                         , options = \model -> model.validNicknames
                         , optionToLabel = identity
                         , attrs =
-                            [ AF.onSearch SearchNicknames
-                            , AF.onEnter AddNicknameOption
+                            [ AF.onSearch (\_ _ _ -> SearchNicknames)
+                            , AF.onEnter (\_ _ _ -> AddNicknameOption)
                             , AF.required
                             ]
                         }
