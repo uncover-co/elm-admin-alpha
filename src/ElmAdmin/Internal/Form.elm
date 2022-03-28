@@ -53,7 +53,7 @@ type Field model msg params resource
             { required : Bool
             , hidden : model -> params -> resource -> Bool
             , readOnly : model -> params -> resource -> Bool
-            , onSearch : Maybe (String -> msg)
+            , onSearch : Maybe (resource -> String -> msg)
             , onEnter : Maybe (String -> msg)
             }
         }

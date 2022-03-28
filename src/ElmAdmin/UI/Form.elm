@@ -138,7 +138,7 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                                                     [ ( search_, value_ )
                                                                                         |> ElmAdmin.Internal.Form.FieldValueAutocomplete
                                                                                         |> UpdateFormField ( form.title, label )
-                                                                                    , GotMsg (onSearch search_)
+                                                                                    , GotMsg (onSearch resource search_)
                                                                                     ]
 
                                                                             Nothing ->
