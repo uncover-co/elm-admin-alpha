@@ -212,14 +212,14 @@ pagePosts =
                     |> AF.autocomplete
                         { label = "Author"
                         , value = .author
-                        , options = \model -> Just model.users
+                        , options = \model _ -> Just model.users
                         , optionToLabel = .name
                         , attrs = []
                         }
                     |> AF.autocomplete
                         { label = "Author Nickname"
                         , value = .authorNickname
-                        , options = \model -> model.validNicknames
+                        , options = \model _ -> model.validNicknames
                         , optionToLabel = identity
                         , attrs =
                             [ AF.onSearch (\_ _ _ -> SearchNicknames)
@@ -231,7 +231,7 @@ pagePosts =
                         { label = "Is Published"
                         , value = .published
                         , optionToLabel = publishedToString
-                        , options = \_ -> [ Published, NotPublished ]
+                        , options = \_ _ -> [ Published, NotPublished ]
                         , attrs = [ AF.readOnly ]
                         }
                     |> AF.range
