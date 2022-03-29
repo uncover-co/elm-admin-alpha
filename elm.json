@@ -3,7 +3,7 @@
     "name": "uncover-co/elm-admin-alpha",
     "summary": "A framework for building admin applications themed through ThemeSpec.",
     "license": "MPL-2.0",
-    "version": "12.0.0",
+    "version": "12.1.0",
     "exposed-modules": [
         "ElmAdmin",
         "ElmAdmin.Page",
@@ -19,7 +19,7 @@
         "elm/svg": "1.0.1 <= v < 2.0.0",
         "elm/time": "1.0.0 <= v < 2.0.0",
         "elm/url": "1.0.0 <= v < 2.0.0",
-        "uncover-co/elm-submodules": "1.0.2 <= v < 2.0.0",
+        "uncover-co/elm-submodules": "1.1.0 <= v < 2.0.0",
         "uncover-co/elm-theme-spec": "3.0.2 <= v < 4.0.0",
         "uncover-co/elm-widgets-alpha": "7.0.2 <= v < 8.0.0"
     },

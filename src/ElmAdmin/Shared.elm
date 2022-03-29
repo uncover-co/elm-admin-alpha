@@ -4,6 +4,7 @@ module ElmAdmin.Shared exposing
     , ElmAdmin
     , Model
     , Msg(..)
+    , mapAction
     )
 
 import Browser exposing (UrlRequest)
@@ -64,3 +65,80 @@ type Effect msg
 
 type alias Action msg =
     SubCmd.SubCmd msg (Effect msg)
+
+
+mapMsg : (msgA -> msgB) -> Msg msgA -> Msg msgB
+mapMsg fn msg =
+    case msg of
+        -- Msg related
+        Batch msgs ->
+            msgs
+                |> List.map (mapMsg fn)
+                |> Batch
+
+        GotEffect effect ->
+            GotEffect (mapEffect fn effect)
+
+        GotMsg msg_ ->
+            GotMsg (fn msg_)
+
+        SetDebounce label time msg_ ->
+            SetDebounce label time (mapMsg fn msg_)
+
+        -- Unrelated to Msgs
+        DoNothing ->
+            DoNothing
+
+        ToggleDarkMode ->
+            ToggleDarkMode
+
+        OnUrlRequest a ->
+            OnUrlRequest a
+
+        OnUrlChange a ->
+            OnUrlChange a
+
+        HideNotification a ->
+            HideNotification a
+
+        SetNotificationExpiration a ->
+            SetNotificationExpiration a
+
+        SetValidatedField a ->
+            SetValidatedField a
+
+        UpdateFormField a b ->
+            UpdateFormField a b
+
+        UpdateDebounced a ->
+            UpdateDebounced a
+
+
+mapEffect : (msgA -> msgB) -> Effect msgA -> Effect msgB
+mapEffect fn effect =
+    case effect of
+        UpdateFormModel fn_ ->
+            UpdateFormModel fn_
+
+        ShowNotification status html ->
+            ShowNotification status (Html.map fn html)
+
+        Debounce label interval msg ->
+            Debounce label interval (mapMsg fn msg)
+
+
+mapAction : (msgA -> msgB) -> Action msgA -> Action msgB
+mapAction fn action =
+    SubCmd.mapBoth fn
+        (\effect ->
+            case effect of
+                UpdateFormModel fn_ ->
+                    UpdateFormModel fn_
+
+                ShowNotification status html ->
+                    ShowNotification status (Html.map fn html)
+
+                Debounce label interval msg ->
+                    Debounce label interval (mapMsg fn msg)
+        )
+        action

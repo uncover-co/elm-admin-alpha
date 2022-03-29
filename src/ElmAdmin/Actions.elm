@@ -1,5 +1,5 @@
 module ElmAdmin.Actions exposing
-    ( cmd, none, batch, Action
+    ( cmd, none, batch, map, Action
     , showNotification, showHighlightNotification, showSuccessNotification, showWarningNotification, showDangerNotification
     , initForm, debounce
     )
@@ -44,7 +44,7 @@ But you can also trigger actions that will be handled by ElmAdmin itself.
 
 # Commands
 
-@docs cmd, none, batch, Action
+@docs cmd, none, batch, map, Action
 
 
 # Notifications
@@ -92,6 +92,13 @@ none =
 batch : List (Action msg) -> Action msg
 batch =
     SubCmd.batch
+
+
+{-| Maps an `Action msgA` to an `Action msgB`. Useful for submodules.
+-}
+map : (msgA -> msgB) -> Action msgA -> Action msgB
+map =
+    ElmAdmin.Shared.mapAction
 
 
 {-| Triggers a notification that will fade out after a while.
