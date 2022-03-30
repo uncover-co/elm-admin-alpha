@@ -280,6 +280,7 @@ list :
     , init : model -> params -> Maybe (List resource)
     , toItem :
         model
+        -> params
         -> resource
         ->
             { label : Html msg

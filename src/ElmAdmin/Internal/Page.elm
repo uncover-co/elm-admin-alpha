@@ -445,6 +445,7 @@ list :
     , init : model -> params -> Maybe (List a)
     , toItem :
         model
+        -> params
         -> a
         ->
             { label : Html msg
@@ -466,7 +467,7 @@ list props (Page p) =
                         { title = props.title
                         , items =
                             props.init model params_
-                                |> Maybe.map (List.map (props.toItem model))
+                                |> Maybe.map (List.map (props.toItem model params_))
                         }
                 )
     in
