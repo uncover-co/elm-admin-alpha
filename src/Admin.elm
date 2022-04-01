@@ -1,4 +1,4 @@
-module ElmAdmin exposing
+module Admin exposing
     ( admin, adminWithActions, pages, protectedPages, theme, ElmAdmin, Options
     , single, url, external, group, visualGroup, folderGroup, NavigationItem
     , hidden, disabled
@@ -40,6 +40,7 @@ import Browser.Navigation exposing (..)
 import Dict exposing (Dict)
 import ElmAdmin.Actions
 import ElmAdmin.Application
+import ElmAdmin.Internal.InvalidRouteData exposing (InvalidRouteData)
 import ElmAdmin.Internal.Page exposing (Page, Route)
 import ElmAdmin.Router
 import ElmAdmin.Shared exposing (Action, Effect(..), Msg(..))
@@ -71,11 +72,24 @@ type alias RouteParams =
 
 
 -- Navigation
+-- type Route model msg
+--     = Invalid { path : String, page : String, error : String }
+--     | External { url : String, label : String }
+--     | Internal
+--         { route : Route model msg
+--         , title : RouteParams -> model -> String
+--         , hidden : RouteParams -> model -> String
+--         , disabled : RouteParams -> model -> String
+--         }
+--     | Group
+--         { title : String
+--         , routes : List (Route model msg)
+--         }
 
 
 {-| -}
 type NavigationItem model msg
-    = Invalid String String
+    = Invalid InvalidRouteData
     | External String String
     | Url (NavItemHidden model msg)
     | Single (NavItemData model msg)
@@ -135,7 +149,11 @@ url path page =
                 }
 
         Nothing ->
-            Invalid (ElmAdmin.Internal.Page.toTitle page) path
+            Invalid
+                { path = path
+                , page = ElmAdmin.Internal.Page.toTitle page
+                , error = ""
+                }
 
 
 {-| Used for creating a single page with a nav link.
@@ -164,7 +182,11 @@ single path title page =
                 }
 
         Nothing ->
-            Invalid (ElmAdmin.Internal.Page.toTitle page) path
+            Invalid
+                { path = path
+                , page = ElmAdmin.Internal.Page.toTitle page
+                , error = ""
+                }
 
 
 {-| Used for creating grouped pages. Note that the "group" is also a page and if it is hidden or disabled by any means, then the whole group will follow.
@@ -196,7 +218,11 @@ group path title page items =
                 }
 
         Nothing ->
-            Invalid (ElmAdmin.Internal.Page.toTitle page) path
+            Invalid
+                { path = path
+                , page = ElmAdmin.Internal.Page.toTitle page
+                , error = ""
+                }
 
 
 {-| A group that shows its items only if one of them is the current active path.
@@ -222,7 +248,7 @@ folderGroup path title page items_ =
             List.foldl
                 (\item acc ->
                     case item of
-                        Invalid _ _ ->
+                        Invalid _ ->
                             acc
 
                         External _ _ ->
@@ -288,7 +314,7 @@ visualGroup title items =
 hidden : (RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
 hidden fn a =
     case a of
-        Invalid _ _ ->
+        Invalid _ ->
             a
 
         External _ _ ->
@@ -316,7 +342,7 @@ hidden fn a =
 disabled : (RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
 disabled fn a =
     case a of
-        Invalid _ _ ->
+        Invalid _ ->
             a
 
         External _ _ ->
@@ -370,7 +396,7 @@ disableSubItem fn item =
             fn routeParams model || fn2 routeParams model
     in
     case item of
-        Invalid _ _ ->
+        Invalid _ ->
             item
 
         External _ _ ->
@@ -605,7 +631,7 @@ adminWithActions props options_ =
                 |> List.foldl
                     (\navItem acc ->
                         case navItem of
-                            Invalid _ _ ->
+                            Invalid _ ->
                                 acc
 
                             External _ _ ->
@@ -661,7 +687,7 @@ adminWithActions props options_ =
         viewProtectedNavItems =
             viewNavItemsFromNavigatiomItems options.protectedPages
 
-        invalidRoutes : List ( String, String )
+        invalidRoutes : List InvalidRouteData
         invalidRoutes =
             let
                 invalidRoutes_ xs_ acc =
@@ -669,8 +695,8 @@ adminWithActions props options_ =
                         |> List.foldl
                             (\item acc_ ->
                                 case item of
-                                    Invalid title_ path ->
-                                        ( title_, path ) :: acc_
+                                    Invalid data ->
+                                        data :: acc_
 
                                     Group { items } ->
                                         invalidRoutes_ items acc_
@@ -693,7 +719,7 @@ adminWithActions props options_ =
                         |> List.foldl
                             (\item ( paths, duplicatedPaths ) ->
                                 case item of
-                                    Invalid _ path ->
+                                    Invalid { path } ->
                                         if Set.member path paths then
                                             ( paths, Set.insert path duplicatedPaths )
 
@@ -822,7 +848,7 @@ viewNavItemsFromNavigatiomItems ps =
                 |> List.foldl
                     (\navItem acc ->
                         case navItem of
-                            Invalid _ _ ->
+                            Invalid _ ->
                                 acc
 
                             External label href_ ->
