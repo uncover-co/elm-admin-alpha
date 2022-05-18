@@ -10,13 +10,12 @@ import Browser exposing (UrlRequest(..))
 import Browser.Navigation
 import Dict exposing (Dict)
 import ElmAdmin.Internal.Form exposing (FieldValue(..))
-import ElmAdmin.Internal.Page exposing (Route)
+import ElmAdmin.Internal.Page exposing (RouteData)
 import ElmAdmin.Router exposing (RouteParams)
 import ElmAdmin.Shared exposing (Action, Effect(..), Model, Msg(..))
 import ElmAdmin.Styles
 import ElmAdmin.UI.Nav exposing (UINavItem)
 import ElmAdmin.UI.Notification
-import ElmWidgets
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events as HE
@@ -24,26 +23,27 @@ import Html.Keyed
 import Set
 import SubModule
 import Task
-import ThemeSpec
+import ThemeProvider
 import Time exposing (Posix)
 import Url exposing (Url)
+import W.Styles
 
 
 routeFromUrl :
-    Dict String (List (Route model msg))
+    Dict String (List (RouteData model msg))
     -> Url
     -> Maybe model
     ->
         Maybe
-            { route : Route model msg
+            { route : RouteData model msg
             , routeParams : RouteParams
             , model : model
             }
-routeFromUrl pageRoutes url maybeModel =
+routeFromUrl pageRouteDatas url maybeModel =
     maybeModel
         |> Maybe.andThen
             (\model ->
-                ElmAdmin.Router.oneOf .pathList pageRoutes url
+                ElmAdmin.Router.oneOf .pathList pageRouteDatas url
                     |> Maybe.andThen
                         (\( route, routeParams ) ->
                             validateEnabled routeParams model route
@@ -54,10 +54,10 @@ routeFromUrl pageRoutes url maybeModel =
 routeFromPath :
     RouteParams
     -> model
-    -> Dict String (Route model msg)
+    -> Dict String (RouteData model msg)
     ->
         Maybe
-            { route : Route model msg
+            { route : RouteData model msg
             , routeParams : RouteParams
             , model : model
             }
@@ -69,10 +69,10 @@ routeFromPath routeParams model routes =
 validateEnabled :
     RouteParams
     -> model
-    -> Route model msg
+    -> RouteData model msg
     ->
         Maybe
-            { route : Route model msg
+            { route : RouteData model msg
             , routeParams : RouteParams
             , model : model
             }
@@ -91,8 +91,8 @@ validateEnabled routeParams model route =
 routeInitFromUrl :
     { url : Url
     , model : model
-    , pageRoutes : Dict String (List (Route model msg))
-    , protectedPageRoutes : Dict String (List (Route protectedModel msg))
+    , pageRouteDatas : Dict String (List (RouteData model msg))
+    , protectedPageRouteDatas : Dict String (List (RouteData protectedModel msg))
     , protectedModel : model -> Maybe protectedModel
     , protectedToModel : model -> protectedModel -> model
     }
@@ -104,8 +104,8 @@ routeInitFromUrl :
             }
 routeInitFromUrl props =
     let
-        protectedRoute =
-            routeFromUrl props.protectedPageRoutes props.url (props.protectedModel props.model)
+        protectedRouteData =
+            routeFromUrl props.protectedPageRouteDatas props.url (props.protectedModel props.model)
                 |> Maybe.map
                     (\r ->
                         r.route.page.init r.routeParams r.model
@@ -121,12 +121,12 @@ routeInitFromUrl props =
                                )
                     )
     in
-    case protectedRoute of
+    case protectedRouteData of
         Just r ->
             Just r
 
         Nothing ->
-            routeFromUrl props.pageRoutes props.url (Just props.model)
+            routeFromUrl props.pageRouteDatas props.url (Just props.model)
                 |> Maybe.map
                     (\r ->
                         r.route.page.init r.routeParams r.model
@@ -145,8 +145,8 @@ routeInitFromUrl props =
 
 init :
     { init : flags -> Browser.Navigation.Key -> ( model, Action msg )
-    , pageRoutes : Dict String (List (Route model msg))
-    , protectedPageRoutes : Dict String (List (Route protectedModel msg))
+    , pageRouteDatas : Dict String (List (RouteData model msg))
+    , protectedPageRouteDatas : Dict String (List (RouteData protectedModel msg))
     , protectedModel : model -> Maybe protectedModel
     , protectedToModel : model -> protectedModel -> model
     , preferDarkMode : Bool
@@ -171,8 +171,8 @@ init props flags url navKey =
         routeInitFromUrl
             { url = url
             , model = initialModel
-            , pageRoutes = props.pageRoutes
-            , protectedPageRoutes = props.protectedPageRoutes
+            , pageRouteDatas = props.pageRouteDatas
+            , protectedPageRouteDatas = props.protectedPageRouteDatas
             , protectedModel = props.protectedModel
             , protectedToModel = props.protectedToModel
             }
@@ -227,10 +227,10 @@ initError initModel flags _ key =
 
 update :
     { update : RouteParams -> msg -> model -> ( model, Action msg )
-    , pages : Dict String (Route model msg)
-    , protectedPages : Dict String (Route protectedModel msg)
-    , pageRoutes : Dict String (List (Route model msg))
-    , protectedPageRoutes : Dict String (List (Route protectedModel msg))
+    , pages : Dict String (RouteData model msg)
+    , protectedPages : Dict String (RouteData protectedModel msg)
+    , pageRouteDatas : Dict String (List (RouteData model msg))
+    , protectedPageRouteDatas : Dict String (List (RouteData protectedModel msg))
     , protectedModel : model -> Maybe protectedModel
     , protectedToModel : model -> protectedModel -> model
     }
@@ -262,8 +262,8 @@ update props msg model =
                 routeInitFromUrl
                     { url = url
                     , model = model.model
-                    , pageRoutes = props.pageRoutes
-                    , protectedPageRoutes = props.protectedPageRoutes
+                    , pageRouteDatas = props.pageRouteDatas
+                    , protectedPageRouteDatas = props.protectedPageRouteDatas
                     , protectedModel = props.protectedModel
                     , protectedToModel = props.protectedToModel
                     }
@@ -481,8 +481,8 @@ update props msg model =
 
 subscriptions :
     { subscriptions : RouteParams -> model -> Sub msg
-    , pages : Dict String (Route model msg)
-    , protectedPages : Dict String (Route protectedModel msg)
+    , pages : Dict String (RouteData model msg)
+    , protectedPages : Dict String (RouteData protectedModel msg)
     , protectedModel : model -> Maybe protectedModel
     , protectedToModel : model -> protectedModel -> model
     }
@@ -530,13 +530,13 @@ view :
     { title : String
     , navItems : List (UINavItem model)
     , protectedNavItems : List (UINavItem protectedModel)
-    , pages : Dict String (Route model msg)
-    , protectedPages : Dict String (Route protectedModel msg)
+    , pages : Dict String (RouteData model msg)
+    , protectedPages : Dict String (RouteData protectedModel msg)
     , protectedModel : model -> Maybe protectedModel
     , theme :
-        { lightTheme : ThemeSpec.Theme
-        , darkTheme : ThemeSpec.Theme
-        , darkModeStrategy : ThemeSpec.DarkModeStrategy
+        { lightTheme : ThemeProvider.Theme
+        , darkTheme : ThemeProvider.Theme
+        , darkModeStrategy : ThemeProvider.DarkModeStrategy
         , preferDarkMode : Bool
         , disableModeSwitch : Bool
         }
@@ -586,18 +586,18 @@ view props model =
     , body =
         [ if props.theme.disableModeSwitch then
             if props.theme.preferDarkMode then
-                ThemeSpec.globalProvider props.theme.darkTheme
+                ThemeProvider.globalProvider props.theme.darkTheme
 
             else
-                ThemeSpec.globalProvider props.theme.lightTheme
+                ThemeProvider.globalProvider props.theme.lightTheme
 
           else
-            ThemeSpec.globalProviderWithDarkMode
+            ThemeProvider.globalProviderWithDarkMode
                 { light = props.theme.lightTheme
                 , dark = props.theme.darkTheme
                 , strategy = props.theme.darkModeStrategy
                 }
-        , ElmWidgets.globalStyles
+        , W.Styles.globalStyles
         , ElmAdmin.Styles.globalStyles
         , div [ classList [ ( "eadm-dark", model.darkMode ) ] ]
             [ case model.notification of
@@ -625,7 +625,7 @@ view props model =
                                 ]
                                 [ text props.title ]
                             ]
-                        , if not props.theme.disableModeSwitch && props.theme.darkModeStrategy /= ThemeSpec.SystemStrategy then
+                        , if not props.theme.disableModeSwitch && props.theme.darkModeStrategy /= ThemeProvider.SystemStrategy then
                             button
                                 [ class "eadm eadm-sidebar-dark-btn"
                                 , HE.onClick ToggleDarkMode

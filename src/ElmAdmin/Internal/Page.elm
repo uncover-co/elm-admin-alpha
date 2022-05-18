@@ -2,7 +2,7 @@ module ElmAdmin.Internal.Page exposing
     ( FormAttributes
     , Page
     , PageData
-    , Route
+    , RouteData
     , card
     , form
     , init
@@ -10,7 +10,7 @@ module ElmAdmin.Internal.Page exposing
     , nav
     , page
     , params
-    , route
+    , routeData
     , subscriptions
     , title
     , toTitle
@@ -24,19 +24,19 @@ import ElmAdmin.Router exposing (RouteParams, pathFromString)
 import ElmAdmin.Shared exposing (Action, Effect(..), Msg(..))
 import ElmAdmin.UI.Form
 import ElmAdmin.UI.List
-import ElmWidgets as W
 import Html as H exposing (Html)
 import Html.Attributes as HA
 import Set
 import SubCmd
 import Time exposing (Month(..))
+import W.DataRow
 
 
 
 -- Model
 
 
-type alias Route model msg =
+type alias RouteData model msg =
     { page : PageData model msg
     , path : String
     , pathList : List String
@@ -77,8 +77,8 @@ type Page model msg params
 -- Unwrapping to PageData
 
 
-route : Page model msg params -> String -> Maybe (Route model msg)
-route page_ path =
+routeData : Page model msg params -> String -> Maybe (RouteData model msg)
+routeData page_ path =
     let
         ( pathList, pathParams ) =
             pathFromString path
@@ -450,7 +450,7 @@ list :
         ->
             { label : Html msg
             , actions : List (Html msg)
-            , options : List (W.DataRowAttributes msg -> W.DataRowAttributes msg)
+            , options : List (W.DataRow.Attribute msg)
             }
     }
     -> Page model msg params

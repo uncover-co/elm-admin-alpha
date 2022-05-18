@@ -25,7 +25,7 @@ type alias ItemDataVisual model =
 
 
 type UINavItem model
-    = External String String
+    = External { url : String, label : String }
     | Single (ItemData model)
     | Group
         { main : ItemData model
@@ -148,14 +148,14 @@ viewList routeParams model items =
             |> List.map
                 (\item_ ->
                     case item_ of
-                        External title href_ ->
+                        External { url, label } ->
                             li [ class "eadm eadm-nav-list-item" ]
                                 [ a
                                     [ class "eadm eadm-nav-item"
-                                    , href href_
+                                    , href url
                                     , target "_blank"
                                     ]
-                                    [ text title ]
+                                    [ text label ]
                                 ]
 
                         Single item ->

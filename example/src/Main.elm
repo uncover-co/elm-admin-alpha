@@ -1,6 +1,6 @@
 module Main exposing (main)
 
-import ElmAdmin as A exposing (ElmAdmin)
+import Admin as A exposing (ElmAdmin)
 import ElmAdmin.Actions as AA
 import ElmAdmin.Form as AF
 import ElmAdmin.Page as AP
@@ -247,7 +247,7 @@ pagePosts =
             { title = text "All Posts"
             , init = \model _ -> Just model.posts
             , toItem =
-                \_ post ->
+                \_ _ post ->
                     { label = text post.title
                     , actions = []
                     , options = []
@@ -265,13 +265,23 @@ main =
         }
         [ A.theme [ A.preferDarkMode ]
         , A.pages
-            [ A.url "/" pageHome
-            , A.single "/sign-in" "Sign In" pageSignIn
+            [ A.route "/"
+                { page = pageHome
+                , options = [ A.alwaysHidden ]
+                }
+                []
+            , A.folderGroup "/sign-in"
+                pageSignIn
+                [ A.external "/sign-in/go" "Go" ]
             ]
         , A.protectedPages
             { fromModel = signedIn
             , toModel = \_ -> SignedIn
             }
-            [ A.single "/posts" "Posts" pagePosts
+            [ A.route "/posts"
+                { page = pagePosts
+                , options = []
+                }
+                []
             ]
         ]

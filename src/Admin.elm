@@ -1,9 +1,10 @@
 module Admin exposing
     ( admin, adminWithActions, pages, protectedPages, theme, ElmAdmin, Options
-    , single, url, external, group, visualGroup, folderGroup, NavigationItem
+    , external, folderGroup
     , hidden, disabled
     , RouteParams
     , preferDarkMode, darkTheme, lightTheme, darkModeClass, disableModeSwitch
+    , Route, alwaysHidden, route
     )
 
 {-|
@@ -41,7 +42,7 @@ import Dict exposing (Dict)
 import ElmAdmin.Actions
 import ElmAdmin.Application
 import ElmAdmin.Internal.InvalidRouteData exposing (InvalidRouteData)
-import ElmAdmin.Internal.Page exposing (Page, Route)
+import ElmAdmin.Internal.Page exposing (Page, RouteData, routeData)
 import ElmAdmin.Router
 import ElmAdmin.Shared exposing (Action, Effect(..), Msg(..))
 import ElmAdmin.UI.Invalid
@@ -49,8 +50,8 @@ import ElmAdmin.UI.Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Set exposing (Set)
+import ThemeProvider
 import ThemeSpec
-import Url exposing (Url)
 
 
 
@@ -72,56 +73,22 @@ type alias RouteParams =
 
 
 -- Navigation
--- type Route model msg
---     = Invalid { path : String, page : String, error : String }
---     | External { url : String, label : String }
---     | Internal
---         { route : Route model msg
---         , title : RouteParams -> model -> String
---         , hidden : RouteParams -> model -> String
---         , disabled : RouteParams -> model -> String
---         }
---     | Group
---         { title : String
---         , routes : List (Route model msg)
---         }
 
 
 {-| -}
-type NavigationItem model msg
+type Route model msg
     = Invalid InvalidRouteData
-    | External String String
-    | Url (NavItemHidden model msg)
-    | Single (NavItemData model msg)
-    | Group
-        { main : NavItemData model msg
-        , items : List (NavigationItem model msg)
+    | External
+        { url : String
+        , label : String
         }
-    | VisualGroup
-        { main : NavItemDataVisual model
-        , items : List (NavigationItem model msg)
+    | Internal
+        { routeData : RouteData model msg
+        , title : RouteParams -> model -> String
+        , hidden : RouteParams -> model -> Bool
+        , disabled : RouteParams -> model -> Bool
+        , pages : List (Route model msg)
         }
-
-
-type alias NavItemData model msg =
-    { route : Route model msg
-    , title : RouteParams -> model -> String
-    , hidden : RouteParams -> model -> Bool
-    , disabled : RouteParams -> model -> Bool
-    }
-
-
-type alias NavItemHidden model msg =
-    { route : Route model msg
-    , disabled : RouteParams -> model -> Bool
-    }
-
-
-type alias NavItemDataVisual model =
-    { title : RouteParams -> model -> String
-    , hidden : RouteParams -> model -> Bool
-    , disabled : RouteParams -> model -> Bool
-    }
 
 
 {-| Used for creating external links in your sidebar.
@@ -129,31 +96,9 @@ type alias NavItemDataVisual model =
     external "Docs" "https://package.elm-lang.org/"
 
 -}
-external : String -> String -> NavigationItem model msg
-external =
-    External
-
-
-{-| Used for creating pages that will not appear as nav links but are still accessible through their direct url.
-
-    url Home.page
-
--}
-url : String -> Page model msg params -> NavigationItem model msg
-url path page =
-    case ElmAdmin.Internal.Page.route page path of
-        Just route ->
-            Url
-                { route = route
-                , disabled = \_ _ -> False
-                }
-
-        Nothing ->
-            Invalid
-                { path = path
-                , page = ElmAdmin.Internal.Page.toTitle page
-                , error = ""
-                }
+external : String -> String -> Route model msg
+external url_ label =
+    External { url = url_, label = label }
 
 
 {-| Used for creating a single page with a nav link.
@@ -170,57 +115,29 @@ Note that all page links with params will only appear if they are already presen
     -- But if the user is on "/", no ":userId" is available so the link will disappear.
 
 -}
-single : String -> String -> Page model msg params -> NavigationItem model msg
-single path title page =
-    case ElmAdmin.Internal.Page.route page path of
-        Just route ->
-            Single
-                { route = route
+route :
+    String
+    ->
+        { page : Page model msg params
+        , options : List (Route model msg -> Route model msg)
+        }
+    -> List (Route model msg)
+    -> Route model msg
+route path props subPages =
+    case ElmAdmin.Internal.Page.routeData props.page path of
+        Just routeData ->
+            Internal
+                { pages = subPages
+                , routeData = routeData
                 , hidden = \_ _ -> False
-                , title = \_ _ -> title
+                , title = \_ _ -> ElmAdmin.Internal.Page.toTitle props.page
                 , disabled = \_ _ -> False
                 }
 
         Nothing ->
             Invalid
                 { path = path
-                , page = ElmAdmin.Internal.Page.toTitle page
-                , error = ""
-                }
-
-
-{-| Used for creating grouped pages. Note that the "group" is also a page and if it is hidden or disabled by any means, then the whole group will follow.
-
-    group "Workspace"
-        Workspace.index
-        [ single "New" Workspace.create
-        , hidden "Update" Workspace.update
-        ]
-
--}
-group :
-    String
-    -> String
-    -> Page model msg params
-    -> List (NavigationItem model msg)
-    -> NavigationItem model msg
-group path title page items =
-    case ElmAdmin.Internal.Page.route page path of
-        Just route ->
-            Group
-                { main =
-                    { route = route
-                    , hidden = \_ _ -> False
-                    , title = \_ _ -> title
-                    , disabled = \_ _ -> False
-                    }
-                , items = items
-                }
-
-        Nothing ->
-            Invalid
-                { path = path
-                , page = ElmAdmin.Internal.Page.toTitle page
+                , page = ElmAdmin.Internal.Page.toTitle props.page
                 , error = ""
                 }
 
@@ -237,13 +154,12 @@ group path title page items =
 -}
 folderGroup :
     String
-    -> String
     -> Page model msg params
-    -> List (NavigationItem model msg)
-    -> NavigationItem model msg
-folderGroup path title page items_ =
+    -> List (Route model msg)
+    -> Route model msg
+folderGroup path page items_ =
     let
-        paths_ : List (NavigationItem model msg) -> Set String -> Set String
+        paths_ : List (Route model msg) -> Set String -> Set String
         paths_ items__ acc_ =
             List.foldl
                 (\item acc ->
@@ -251,21 +167,12 @@ folderGroup path title page items_ =
                         Invalid _ ->
                             acc
 
-                        External _ _ ->
+                        External _ ->
                             acc
 
-                        Single p ->
-                            Set.insert p.route.path acc
-
-                        Url p ->
-                            Set.insert p.route.path acc
-
-                        Group { main, items } ->
-                            Set.insert main.route.path acc
-                                |> paths_ items
-
-                        VisualGroup { items } ->
-                            paths_ items acc
+                        Internal p ->
+                            Set.insert p.routeData.path acc
+                                |> paths_ p.pages
                 )
                 acc_
                 items__
@@ -273,36 +180,25 @@ folderGroup path title page items_ =
         paths =
             paths_ items_ (Set.fromList [ path ])
     in
-    group
-        path
-        title
-        page
-        [ visualGroup "" items_
-            |> hidden
-                (\r _ -> not (Set.member r.path paths))
-        ]
-
-
-{-| Creates a visual group (The group label itself is not a nav link).
-
-Tip: This can be useful if you want to disable whole sections of your application but you don't want that to be related to one specific root page.
-
-    visualGroup "Workspace"
-        [ single "New" Workspace.create
-        , hidden "Update" Workspace.update
-        ]
-
--}
-visualGroup : String -> List (NavigationItem model msg) -> NavigationItem model msg
-visualGroup title items =
-    VisualGroup
-        { main =
-            { hidden = \_ _ -> False
-            , title = \_ _ -> title
-            , disabled = \_ _ -> False
-            }
-        , items = items
+    route path
+        { page = page
+        , options = []
         }
+        (items_
+            |> List.map
+                (\p ->
+                    hidden
+                        (\r _ -> not (Set.member r.path paths))
+                        p
+                )
+        )
+
+
+{-| Hides the route from the navigation. Making it only accessible through the direct url.
+-}
+alwaysHidden : Route model msg -> Route model msg
+alwaysHidden =
+    hidden (\_ _ -> True)
 
 
 {-| Conditionally hide nav links.
@@ -311,26 +207,17 @@ visualGroup title items =
         |> hidden (\_ model -> not (userIsAdmin model))
 
 -}
-hidden : (RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
+hidden : (RouteParams -> model -> Bool) -> Route model msg -> Route model msg
 hidden fn a =
     case a of
         Invalid _ ->
             a
 
-        External _ _ ->
+        External _ ->
             a
 
-        Url _ ->
-            a
-
-        Single i ->
-            Single { i | hidden = fn }
-
-        Group { main, items } ->
-            Group { main = { main | hidden = fn }, items = items }
-
-        VisualGroup { main, items } ->
-            VisualGroup { main = { main | hidden = fn }, items = items }
+        Internal v ->
+            Internal { v | hidden = fn }
 
 
 {-| Conditionally disable nav links and their pages. They won't be accessible even through urls.
@@ -339,47 +226,27 @@ hidden fn a =
         |> disable (\_ model -> not (userIsAdmin model))
 
 -}
-disabled : (RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
+disabled : (RouteParams -> model -> Bool) -> Route model msg -> Route model msg
 disabled fn a =
     case a of
         Invalid _ ->
             a
 
-        External _ _ ->
+        External _ ->
             a
 
-        Url p ->
-            Url { p | disabled = fn }
-
-        Single i ->
+        Internal i ->
             let
-                route : Route model msg
-                route =
-                    i.route
+                routeData : RouteData model msg
+                routeData =
+                    i.routeData
             in
-            Single { i | disabled = fn, route = { route | disabled = fn } }
-
-        Group { main, items } ->
-            let
-                route : Route model msg
-                route =
-                    main.route
-            in
-            Group
-                { main =
-                    { main
-                        | disabled = fn
-                        , route = { route | disabled = fn }
-                    }
-                , items =
-                    List.map (disableSubItem fn) items
-                }
-
-        VisualGroup { main, items } ->
-            VisualGroup
-                { main = { main | disabled = fn }
-                , items =
-                    List.map (disableSubItem fn) items
+            Internal
+                { i
+                    | disabled = fn
+                    , routeData = { routeData | disabled = fn }
+                    , pages =
+                        List.map (disableSubItem fn) i.pages
                 }
 
 
@@ -388,7 +255,7 @@ disabled fn a =
 It grabs the current disable function and creates a new one that sums both checks.
 
 -}
-disableSubItem : (RouteParams -> model -> Bool) -> NavigationItem model msg -> NavigationItem model msg
+disableSubItem : (RouteParams -> model -> Bool) -> Route model msg -> Route model msg
 disableSubItem fn item =
     let
         sumDisabled : (RouteParams -> model -> Bool) -> RouteParams -> model -> Bool
@@ -399,55 +266,23 @@ disableSubItem fn item =
         Invalid _ ->
             item
 
-        External _ _ ->
+        External _ ->
             item
 
-        Url p ->
-            Url { p | disabled = sumDisabled p.disabled }
-
-        Single i ->
+        Internal i ->
             let
-                route : Route model msg
-                route =
-                    i.route
+                routeData : RouteData model msg
+                routeData =
+                    i.routeData
             in
-            Single
+            Internal
                 { i
                     | disabled = sumDisabled i.disabled
-                    , route =
-                        { route
-                            | disabled = sumDisabled route.disabled
+                    , routeData =
+                        { routeData
+                            | disabled = sumDisabled routeData.disabled
                         }
-                }
-
-        Group { main, items } ->
-            let
-                route : Route model msg
-                route =
-                    main.route
-            in
-            Group
-                { main =
-                    { main
-                        | disabled = sumDisabled main.disabled
-                        , route =
-                            { route
-                                | disabled = sumDisabled route.disabled
-                            }
-                    }
-                , items =
-                    List.map (disableSubItem fn) items
-                }
-
-        VisualGroup { main, items } ->
-            VisualGroup
-                { main =
-                    { main
-                        | disabled =
-                            sumDisabled main.disabled
-                    }
-                , items =
-                    List.map (disableSubItem fn) items
+                    , pages = List.map (disableSubItem fn) i.pages
                 }
 
 
@@ -461,10 +296,10 @@ type ThemeOptions
 
 
 type alias ThemeOptionsData =
-    { lightTheme : ThemeSpec.Theme
-    , darkTheme : ThemeSpec.Theme
+    { lightTheme : ThemeProvider.Theme
+    , darkTheme : ThemeProvider.Theme
     , preferDarkMode : Bool
-    , darkModeStrategy : ThemeSpec.DarkModeStrategy
+    , darkModeStrategy : ThemeProvider.DarkModeStrategy
     , disableModeSwitch : Bool
     }
 
@@ -473,9 +308,9 @@ themeDefaults : ThemeOptions
 themeDefaults =
     ThemeOptions
         { preferDarkMode = False
-        , lightTheme = ThemeSpec.lightTheme
-        , darkTheme = ThemeSpec.darkTheme
-        , darkModeStrategy = ThemeSpec.ClassStrategy "eadm-dark"
+        , lightTheme = ThemeSpec.theme ThemeSpec.lightTheme
+        , darkTheme = ThemeSpec.theme ThemeSpec.darkTheme
+        , darkModeStrategy = ThemeProvider.ClassStrategy "eadm-dark"
         , disableModeSwitch = False
         }
 
@@ -506,21 +341,21 @@ disableModeSwitch (ThemeOptions options) =
 Tip: If you're using tailwind's `dark:` variants you might want to set this to `ThemeSpec.ClassStrategy "dark"`.
 
 -}
-darkModeClass : ThemeSpec.DarkModeStrategy -> ThemeOptions -> ThemeOptions
+darkModeClass : ThemeProvider.DarkModeStrategy -> ThemeOptions -> ThemeOptions
 darkModeClass strategy (ThemeOptions options) =
     ThemeOptions { options | darkModeStrategy = strategy }
 
 
 {-| Sets the theme used on light mode.
 -}
-lightTheme : ThemeSpec.Theme -> ThemeOptions -> ThemeOptions
+lightTheme : ThemeProvider.Theme -> ThemeOptions -> ThemeOptions
 lightTheme theme_ (ThemeOptions options) =
     ThemeOptions { options | lightTheme = theme_ }
 
 
 {-| Sets the theme used on dark mode.
 -}
-darkTheme : ThemeSpec.Theme -> ThemeOptions -> ThemeOptions
+darkTheme : ThemeProvider.Theme -> ThemeOptions -> ThemeOptions
 darkTheme theme_ (ThemeOptions options) =
     ThemeOptions { options | lightTheme = theme_ }
 
@@ -532,8 +367,8 @@ type Options flags model protectedModel msg
 
 type alias OptionsData model protectedModel msg =
     { theme : ThemeOptions
-    , pages : List (NavigationItem model msg)
-    , protectedPages : List (NavigationItem protectedModel msg)
+    , pages : List (Route model msg)
+    , protectedPages : List (Route protectedModel msg)
     , protectedModel : model -> Maybe protectedModel
     , protectedToModel : model -> protectedModel -> model
     }
@@ -552,7 +387,7 @@ defaultOptions =
 
 {-| Defines a list of pages for your application.
 -}
-pages : List (NavigationItem model msg) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
+pages : List (Route model msg) -> Options flags model protectedModel msg -> Options flags model protectedModel msg
 pages pages_ (Options options) =
     Options { options | pages = pages_ }
 
@@ -563,7 +398,7 @@ protectedPages :
     { fromModel : model -> Maybe protectedModel
     , toModel : model -> protectedModel -> model
     }
-    -> List (NavigationItem protectedModel msg)
+    -> List (Route protectedModel msg)
     -> Options flags model protectedModel msg
     -> Options flags model protectedModel msg
 protectedPages { fromModel, toModel } protectedPages_ (Options options) =
@@ -623,10 +458,10 @@ adminWithActions props options_ =
                 ThemeOptions d ->
                     d
 
-        routes :
-            List (NavigationItem m msg)
-            -> List (Route m msg)
-        routes xs =
+        routeDatas :
+            List (Route m msg)
+            -> List (RouteData m msg)
+        routeDatas xs =
             xs
                 |> List.foldl
                     (\navItem acc ->
@@ -634,58 +469,49 @@ adminWithActions props options_ =
                             Invalid _ ->
                                 acc
 
-                            External _ _ ->
+                            External _ ->
                                 acc
 
-                            Url p ->
-                                p.route :: acc
-
-                            Single navItem_ ->
-                                navItem_.route :: acc
-
-                            Group navItem_ ->
-                                routes navItem_.items ++ (navItem_.main.route :: acc)
-
-                            VisualGroup navItem_ ->
-                                routes navItem_.items ++ acc
+                            Internal navItem_ ->
+                                routeDatas navItem_.pages ++ (navItem_.routeData :: acc)
                     )
                     []
 
-        pagesRouteList : List (Route model msg)
+        pagesRouteList : List (RouteData model msg)
         pagesRouteList =
-            routes options.pages
+            routeDatas options.pages
 
-        protectedPagesRouteList : List (Route protectedModel msg)
+        protectedPagesRouteList : List (RouteData protectedModel msg)
         protectedPagesRouteList =
-            routes options.protectedPages
+            routeDatas options.protectedPages
 
-        pageRoutes : Dict String (List (Route model msg))
-        pageRoutes =
+        pageRouteDatas : Dict String (List (RouteData model msg))
+        pageRouteDatas =
             ElmAdmin.Router.toCache .pathList pagesRouteList
 
-        protectedPageRoutes : Dict String (List (Route protectedModel msg))
-        protectedPageRoutes =
+        protectedPageRouteDatas : Dict String (List (RouteData protectedModel msg))
+        protectedPageRouteDatas =
             ElmAdmin.Router.toCache .pathList protectedPagesRouteList
 
-        pages_ : Dict String (Route model msg)
+        pages_ : Dict String (RouteData model msg)
         pages_ =
             pagesRouteList
-                |> List.map (\route -> ( route.path, route ))
+                |> List.map (\routeData -> ( routeData.path, routeData ))
                 |> Dict.fromList
 
-        protectedPages_ : Dict String (Route protectedModel msg)
+        protectedPages_ : Dict String (RouteData protectedModel msg)
         protectedPages_ =
             protectedPagesRouteList
-                |> List.map (\route -> ( route.path, route ))
+                |> List.map (\routeData -> ( routeData.path, routeData ))
                 |> Dict.fromList
 
         viewNavItems : List (ElmAdmin.UI.Nav.UINavItem model)
         viewNavItems =
-            viewNavItemsFromNavigatiomItems options.pages
+            viewNavItemsFromNavigationItems options.pages
 
         viewProtectedNavItems : List (ElmAdmin.UI.Nav.UINavItem protectedModel)
         viewProtectedNavItems =
-            viewNavItemsFromNavigatiomItems options.protectedPages
+            viewNavItemsFromNavigationItems options.protectedPages
 
         invalidRoutes : List InvalidRouteData
         invalidRoutes =
@@ -698,14 +524,11 @@ adminWithActions props options_ =
                                     Invalid data ->
                                         data :: acc_
 
-                                    Group { items } ->
-                                        invalidRoutes_ items acc_
-
-                                    VisualGroup { items } ->
-                                        invalidRoutes_ items acc_
-
-                                    _ ->
+                                    External _ ->
                                         acc_
+
+                                    Internal p ->
+                                        invalidRoutes_ p.pages acc_
                             )
                             acc
             in
@@ -726,36 +549,19 @@ adminWithActions props options_ =
                                         else
                                             ( Set.insert path paths, duplicatedPaths )
 
-                                    External _ _ ->
+                                    External _ ->
                                         ( paths, duplicatedPaths )
 
-                                    Url item_ ->
-                                        if Set.member item_.route.path paths then
-                                            ( paths, Set.insert item_.route.path duplicatedPaths )
-
-                                        else
-                                            ( Set.insert item_.route.path paths, duplicatedPaths )
-
-                                    Single item_ ->
-                                        if Set.member item_.route.path paths then
-                                            ( paths, Set.insert item_.route.path duplicatedPaths )
-
-                                        else
-                                            ( Set.insert item_.route.path paths, duplicatedPaths )
-
-                                    Group { main, items } ->
+                                    Internal item_ ->
                                         let
                                             acc__ =
-                                                if Set.member main.route.path paths then
-                                                    ( paths, Set.insert main.route.path duplicatedPaths )
+                                                if Set.member item_.routeData.path paths then
+                                                    ( paths, Set.insert item_.routeData.path duplicatedPaths )
 
                                                 else
-                                                    ( Set.insert main.route.path paths, duplicatedPaths )
+                                                    ( Set.insert item_.routeData.path paths, duplicatedPaths )
                                         in
-                                        invalidRoutes_ items acc__
-
-                                    VisualGroup { items } ->
-                                        invalidRoutes_ items ( paths, duplicatedPaths )
+                                        invalidRoutes_ item_.pages acc__
                             )
                             acc
 
@@ -778,8 +584,8 @@ adminWithActions props options_ =
                 , init =
                     ElmAdmin.Application.init
                         { init = props.init
-                        , pageRoutes = pageRoutes
-                        , protectedPageRoutes = protectedPageRoutes
+                        , pageRouteDatas = pageRouteDatas
+                        , protectedPageRouteDatas = protectedPageRouteDatas
                         , protectedModel = options.protectedModel
                         , protectedToModel = options.protectedToModel
                         , preferDarkMode = theme_.preferDarkMode
@@ -789,8 +595,8 @@ adminWithActions props options_ =
                         { update = props.update
                         , pages = pages_
                         , protectedPages = protectedPages_
-                        , pageRoutes = pageRoutes
-                        , protectedPageRoutes = protectedPageRoutes
+                        , pageRouteDatas = pageRouteDatas
+                        , protectedPageRouteDatas = protectedPageRouteDatas
                         , protectedModel = options.protectedModel
                         , protectedToModel = options.protectedToModel
                         }
@@ -839,10 +645,10 @@ adminWithActions props options_ =
                 }
 
 
-viewNavItemsFromNavigatiomItems : List (NavigationItem m msg) -> List (ElmAdmin.UI.Nav.UINavItem m)
-viewNavItemsFromNavigatiomItems ps =
+viewNavItemsFromNavigationItems : List (Route m msg) -> List (ElmAdmin.UI.Nav.UINavItem m)
+viewNavItemsFromNavigationItems ps =
     let
-        go : List (NavigationItem m msg) -> List (ElmAdmin.UI.Nav.UINavItem m)
+        go : List (Route m msg) -> List (ElmAdmin.UI.Nav.UINavItem m)
         go navItems_ =
             navItems_
                 |> List.foldl
@@ -851,43 +657,19 @@ viewNavItemsFromNavigatiomItems ps =
                             Invalid _ ->
                                 acc
 
-                            External label href_ ->
-                                ElmAdmin.UI.Nav.External label href_ :: acc
+                            External data ->
+                                ElmAdmin.UI.Nav.External data :: acc
 
-                            Url _ ->
-                                acc
-
-                            Single navItem_ ->
-                                ElmAdmin.UI.Nav.Single
-                                    { title = navItem_.title
-                                    , path = navItem_.route.path
-                                    , pathParams = navItem_.route.pathParams
-                                    , hidden = navItem_.hidden
-                                    , disabled = navItem_.disabled
-                                    }
-                                    :: acc
-
-                            Group { main, items } ->
+                            Internal navItem_ ->
                                 ElmAdmin.UI.Nav.Group
                                     { main =
-                                        { title = main.title
-                                        , path = main.route.path
-                                        , pathParams = main.route.pathParams
-                                        , hidden = main.hidden
-                                        , disabled = main.disabled
+                                        { title = navItem_.title
+                                        , path = navItem_.routeData.path
+                                        , pathParams = navItem_.routeData.pathParams
+                                        , hidden = navItem_.hidden
+                                        , disabled = navItem_.disabled
                                         }
-                                    , items = go items
-                                    }
-                                    :: acc
-
-                            VisualGroup { main, items } ->
-                                ElmAdmin.UI.Nav.VisualGroup
-                                    { main =
-                                        { title = main.title
-                                        , hidden = main.hidden
-                                        , disabled = main.disabled
-                                        }
-                                    , items = go items
+                                    , items = go navItem_.pages
                                     }
                                     :: acc
                     )

@@ -15,12 +15,17 @@
             "elm/svg": "1.0.1",
             "elm/time": "1.0.0",
             "elm/url": "1.0.0",
-            "uncover-co/elm-submodules": "1.0.3",
-            "uncover-co/elm-theme-spec": "3.0.2",
-            "uncover-co/elm-widgets-alpha": "7.0.2"
+            "uncover-co/elm-submodules": "1.1.0",
+            "uncover-co/elm-theme-provider": "1.0.1",
+            "uncover-co/elm-theme-spec": "7.1.0",
+            "uncover-co/elm-widgets-alpha": "10.0.0"
         },
         "indirect": {
-            "elm/virtual-dom": "1.0.2"
+            "avh4/elm-color": "1.0.0",
+            "elm/parser": "1.1.0",
+            "elm/virtual-dom": "1.0.3",
+            "justinmimbs/date": "4.0.1",
+            "justinmimbs/time-extra": "1.1.1"
         }
     },
     "test-dependencies": {

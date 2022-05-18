@@ -47,8 +47,8 @@ import ElmAdmin.Form
 import ElmAdmin.Internal.Page
 import ElmAdmin.Router exposing (RouteParams)
 import ElmAdmin.Shared exposing (Action, Effect(..), Msg(..))
-import ElmWidgets as W
 import Html exposing (Html)
+import W.DataRow
 
 
 {-| -}
@@ -285,7 +285,7 @@ list :
         ->
             { label : Html msg
             , actions : List (Html msg)
-            , options : List (W.DataRowAttributes msg -> W.DataRowAttributes msg)
+            , options : List (W.DataRow.Attribute msg)
             }
     }
     -> Page model msg params
