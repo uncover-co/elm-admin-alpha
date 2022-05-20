@@ -2,6 +2,8 @@ module Admin.Page exposing
     ( page, params, Page
     , title, nav, init
     , view, card, list, form
+    , oneParam, customParam
+    , parsedParams, paramsParser, path, custom, query, queryList, ParamsParser
     )
 
 {-|
@@ -9,6 +11,10 @@ module Admin.Page exposing
 @docs page, params, Page
 @docs title, nav, init
 @docs view, card, list, form
+@docs oneParam, customParam
+@docs parsedParams, paramsParser, path, custom, query, queryList, ParamsParser
+
+-- TODO: hidden, loading, readOnly
 
 -}
 
@@ -16,6 +22,7 @@ import Admin.Internal.Application
 import Admin.Internal.Page exposing (Page(..))
 import Admin.Libs.Router exposing (RouteParams)
 import Admin.Shared exposing (Msg(..))
+import Dict
 import ElmAdmin.Internal.Form exposing (FormModel)
 import ElmAdmin.UI.Form
 import ElmAdmin.UI.List
@@ -40,6 +47,10 @@ page title_ =
         , init = \_ _ -> Nothing
         , view = \_ _ _ -> H.text ""
         }
+
+
+
+-- Params
 
 
 {-| -}
@@ -235,3 +246,105 @@ withView before after formModel model params_ =
             [ HA.class "eadm eadm-view eadm-fade-slide" ]
             [ after formModel model params_ ]
         ]
+
+
+{-| -}
+oneParam :
+    String
+    -> Page model msg x
+    -> Page model msg String
+oneParam key =
+    params
+        (\{ pathParams } -> Dict.get key pathParams)
+
+
+{-| -}
+customParam :
+    String
+    -> (String -> Maybe params)
+    -> Page model msg x
+    -> Page model msg params
+customParam key parser =
+    params
+        (\{ pathParams } ->
+            Dict.get key pathParams
+                |> Maybe.andThen parser
+        )
+
+
+{-| -}
+type ParamsParser a
+    = ParamsParser (RouteParams -> Maybe a)
+
+
+{-| -}
+parsedParams :
+    ParamsParser params
+    -> Page model msg x
+    -> Page model msg params
+parsedParams (ParamsParser resolver) =
+    params resolver
+
+
+{-| -}
+paramsParser : a -> ParamsParser a
+paramsParser a =
+    ParamsParser (\_ -> Just a)
+
+
+{-| -}
+path : String -> ParamsParser (String -> a) -> ParamsParser a
+path path_ (ParamsParser resolver) =
+    ParamsParser
+        (\routeParams ->
+            resolver routeParams
+                |> Maybe.andThen
+                    (\resolver_ ->
+                        Dict.get path_ routeParams.pathParams
+                            |> Maybe.map resolver_
+                    )
+        )
+
+
+{-| -}
+custom : String -> (String -> Maybe b) -> ParamsParser (b -> a) -> ParamsParser a
+custom path_ parser (ParamsParser resolver) =
+    ParamsParser
+        (\routeParams ->
+            resolver routeParams
+                |> Maybe.andThen
+                    (\resolver_ ->
+                        Dict.get path_ routeParams.pathParams
+                            |> Maybe.andThen parser
+                            |> Maybe.map resolver_
+                    )
+        )
+
+
+{-| -}
+query : String -> ParamsParser (Maybe String -> a) -> ParamsParser a
+query query_ (ParamsParser resolver) =
+    ParamsParser
+        (\routeParams ->
+            resolver routeParams
+                |> Maybe.andThen
+                    (\resolver_ ->
+                        Dict.get query_ routeParams.queryParams
+                            |> Maybe.map List.head
+                            |> Maybe.map resolver_
+                    )
+        )
+
+
+{-| -}
+queryList : String -> ParamsParser (Maybe (List String) -> a) -> ParamsParser a
+queryList query_ (ParamsParser resolver) =
+    ParamsParser
+        (\routeParams ->
+            resolver routeParams
+                |> Maybe.map
+                    (\resolver_ ->
+                        Dict.get query_ routeParams.queryParams
+                            |> resolver_
+                    )
+        )
