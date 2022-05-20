@@ -91,8 +91,9 @@ update msg model =
                         , nicknames = Set.fromList [ "Georges", "Boris", "Elmhead" ]
                         , validNicknames = Just []
                         }
-                    , AA.cmd <|
-                        Browser.Navigation.pushUrl navKey "/posts"
+                    , AA.none
+                      -- , AA.cmd <|
+                      --     Browser.Navigation.pushUrl navKey "/posts"
                     )
 
                 _ ->
@@ -254,6 +255,15 @@ pageSignIn =
             }
 
 
+pageAlreadySignedIn : AP.Page SignedInModel Msg ()
+pageAlreadySignedIn =
+    AP.page "Sign In"
+        |> AP.card
+            (\_ _ ->
+                text "You're already signed in, silly!"
+            )
+
+
 pagePosts : AP.Page SignedInModel Msg ()
 pagePosts =
     AP.page "Posts"
@@ -319,7 +329,12 @@ main =
         , subscriptions = \_ -> Sub.none
         }
         [ A.protectedRouter signedIn
-            [ AR.route "/posts"
+            [ AR.route "/sign-in"
+                { page = pageAlreadySignedIn
+                , options = []
+                }
+                []
+            , AR.route "/posts"
                 { page = pagePosts
                 , options = []
                 }

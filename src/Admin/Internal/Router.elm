@@ -1,371 +1,252 @@
 module Admin.Internal.Router exposing
-    ( empty, insert, fromList, toList, Router
-    , findByUrl, findByString, toPathId, toPath, toParams, withParams, Route, RouteParams
-    , validRoutes
-    , normalizePath
-    , defaultValidRoutes, emptyParams
+    ( Route(..)
+    , Router
+    , RouterData
+    , oneOf
+    , protectedRouter
+    , router
+    , routerIndex
     )
 
-{-|
-
-@docs empty, insert, fromList, toList, Router
-@docs findByUrl, findByString, toPathId, toPath, toParams, withParams, Route, RouteParams
-@docs validRoutes
-@docs normalizePath
-
--}
-
+import Admin.Internal.NavItem
+import Admin.Internal.Page exposing (PageData)
+import Admin.Libs.Router exposing (RouteParams)
+import Admin.Shared exposing (Msg)
 import Dict exposing (Dict)
-import Set exposing (Set)
+import ElmAdmin.Internal.Form exposing (FormModel)
+import Html as H
 import Url exposing (Url)
 
 
-type Router
-    = Router
-        { routes : Dict (List String) RouteDefinition
-        , paramPaths : Set (List String)
+type Route model msg
+    = External
+        { url : String
+        , label : String
+        }
+    | InternalLink (RouteParams -> model -> { label : String, url : String })
+    | Internal
+        { path : String
+        , page : PageData model msg
+        , hidden : RouteParams -> model -> Bool
+        , subRoutes : List (Route model msg)
         }
 
 
-type alias RouteDefinition =
-    { path : String
-    , pathList : List String
-    , requiredParams : Set String
+{-| -}
+type Router model msg
+    = Router ( model -> Bool, Url -> model -> Maybe (RouterData model msg) )
+
+
+{-| -}
+type alias RouterData model msg =
+    { navItems : model -> Maybe (List Admin.Internal.NavItem.NavItem)
+    , path : String
+    , title : model -> Maybe String
+    , init : model -> Maybe (Msg msg)
+    , view : FormModel -> model -> H.Html (Msg msg)
     }
 
 
-type Route
-    = Route
-        { definition : RouteDefinition
-        , params : RouteParams
-        }
+{-| -}
+routerIndex : List (Router model msg) -> model -> Maybe Int
+routerIndex routers model =
+    routerIndex_ routers model 0
 
 
-type alias RouteParams =
-    { pathParams : Dict String String
-    , queryParams : Dict String (List String)
-    }
+routerIndex_ : List (Router model msg) -> model -> Int -> Maybe Int
+routerIndex_ routers model index =
+    case routers of
+        [] ->
+            Nothing
+
+        (Router ( isModel, _ )) :: xs ->
+            if isModel model then
+                Just index
+
+            else
+                routerIndex_ xs model (index + 1)
 
 
-toPathId : Route -> String
-toPathId (Route route_) =
-    route_.definition.path
+{-| -}
+oneOf : List (Router model msg) -> Url -> model -> Maybe (RouterData model msg)
+oneOf routers url model =
+    case routers of
+        [] ->
+            Nothing
+
+        (Router ( _, toRouter )) :: xs ->
+            case toRouter url model of
+                Just router_ ->
+                    Just router_
+
+                Nothing ->
+                    oneOf xs url model
 
 
-toPath : Route -> String
-toPath (Route route_) =
-    toPath_ route_.params.pathParams route_.definition.path
+{-| -}
+router : List (Route model msg) -> Router model msg
+router =
+    protectedRouter (Just << identity)
 
 
-toPath_ : Dict String String -> String -> String
-toPath_ pathParams_ path =
-    Dict.foldl (\k v acc -> String.replace k v acc) path pathParams_
-
-
-toParams : Route -> RouteParams
-toParams (Route route_) =
-    route_.params
-
-
-emptyParams : RouteParams
-emptyParams =
-    { pathParams = Dict.empty
-    , queryParams = Dict.empty
-    }
-
-
-validRoutes : Route -> Router -> Dict String String
-validRoutes (Route route) (Router router) =
+{-| -}
+protectedRouter :
+    (model -> Maybe subModel)
+    -> List (Route subModel msg)
+    -> Router model msg
+protectedRouter fromModel routes =
     let
-        pathParams_ : Set String
-        pathParams_ =
-            route.params.pathParams
-                |> Dict.keys
-                |> Set.fromList
+        allRoutePaths : List String
+        allRoutePaths =
+            List.concatMap routePaths routes
 
-        validRoutes_ : Dict String String
-        validRoutes_ =
-            router.routes
-                |> Dict.values
-                |> List.filterMap
-                    (\r ->
-                        if not (Set.isEmpty (Set.diff r.requiredParams pathParams_)) then
-                            Nothing
+        router_ : Admin.Libs.Router.Router
+        router_ =
+            Admin.Libs.Router.fromList allRoutePaths
 
-                        else
-                            Just
-                                ( r.path
-                                , toPath_ route.params.pathParams r.path
-                                )
-                    )
-                |> Dict.fromList
-    in
-    validRoutes_
+        allPages : Dict String (Admin.Internal.Page.PageData subModel msg)
+        allPages =
+            toInternalPages routes
 
+        defaultValidRoutes : Dict String String
+        defaultValidRoutes =
+            Admin.Libs.Router.defaultValidRoutes router_
 
-defaultValidRoutes : Router -> Dict String String
-defaultValidRoutes (Router router) =
-    router.routes
-        |> Dict.values
-        |> List.filterMap
-            (\r ->
-                if not (Set.isEmpty r.requiredParams) then
-                    Nothing
-
-                else
-                    Just
-                        ( r.path
-                        , toPath_ Dict.empty r.path
-                        )
-            )
-        |> Dict.fromList
-
-
-empty : Router
-empty =
-    Router
-        { routes = Dict.empty
-        , paramPaths = Set.empty
-        }
-
-
-fromList : List String -> Router
-fromList list =
-    List.foldl insert empty list
-
-
-toList : Router -> List String
-toList (Router router) =
-    router.routes
-        |> Dict.values
-        |> List.map .path
-
-
-insert : String -> Router -> Router
-insert pathString (Router router) =
-    let
-        path : List String
-        path =
-            stringToPath pathString
-
-        pathParams_ : List String
-        pathParams_ =
-            path
-                |> List.filter (String.startsWith ":")
-
-        paramPath : List String
-        paramPath =
-            path
-                |> List.map
-                    (\part ->
-                        if String.startsWith ":" part then
-                            ":param"
-
-                        else
-                            part
-                    )
-
-        routeDef : RouteDefinition
-        routeDef =
-            { path = pathToString path
-            , pathList = path
-            , requiredParams = Set.fromList pathParams_
+        defaultRouteData : RouterData model msg
+        defaultRouteData =
+            { path = "/"
+            , navItems =
+                \model ->
+                    fromModel model
+                        |> Maybe.map (toNavItems defaultValidRoutes routes Admin.Libs.Router.emptyParams)
+            , title = \_ -> Nothing
+            , init = \_ -> Nothing
+            , view = \_ _ -> H.text ""
             }
     in
     Router
-        { routes = Dict.insert paramPath routeDef router.routes
-        , paramPaths =
-            paramPath
-                |> List.indexedMap Tuple.pair
-                |> List.foldl
-                    (\( index, _ ) acc ->
-                        Set.insert (List.take (index + 1) paramPath) acc
-                    )
-                    router.paramPaths
-        }
+        ( \model_ -> fromModel model_ /= Nothing
+        , \url model_ ->
+            case ( Admin.Libs.Router.findByUrl url router_, fromModel model_ ) of
+                ( Just route_, Just _ ) ->
+                    let
+                        params : RouteParams
+                        params =
+                            Admin.Libs.Router.toParams route_
 
+                        validRoutes : Dict String String
+                        validRoutes =
+                            Admin.Libs.Router.validRoutes route_ router_
 
-{-| -}
-findByUrl : Url -> Router -> Maybe Route
-findByUrl url router =
-    findByString url.path url.query router
-
-
-{-| -}
-findByString : String -> Maybe String -> Router -> Maybe Route
-findByString pathString query router =
-    let
-        path : List String
-        path =
-            stringToPath pathString
-    in
-    getPathDefinition router path
-        |> Maybe.andThen
-            (\pathDef ->
-                pathParams pathDef.pathList path
-                    |> Maybe.map
-                        (\pathParams_ ->
-                            Route
-                                { definition = pathDef
-                                , params = RouteParams pathParams_ (queryParams query)
+                        maybePage : Maybe (Admin.Internal.Page.PageData subModel msg)
+                        maybePage =
+                            Dict.get (Admin.Libs.Router.toPathId route_) allPages
+                    in
+                    maybePage
+                        |> Maybe.map
+                            (\page_ ->
+                                { path = Admin.Libs.Router.toPath route_
+                                , navItems =
+                                    \model ->
+                                        fromModel model
+                                            |> Maybe.map (toNavItems validRoutes routes params)
+                                , title =
+                                    \model ->
+                                        fromModel model
+                                            |> Maybe.andThen (page_.title params)
+                                , init =
+                                    \model ->
+                                        fromModel model
+                                            |> Maybe.andThen (page_.init params)
+                                , view =
+                                    \formModel model ->
+                                        fromModel model
+                                            |> Maybe.map (page_.view formModel params)
+                                            |> Maybe.withDefault (H.text "")
                                 }
-                        )
-            )
+                            )
 
-
-{-| -}
-getPathDefinition : Router -> List String -> Maybe RouteDefinition
-getPathDefinition (Router router) path =
-    let
-        go : List String -> List String -> Maybe RouteDefinition
-        go paramsPath unvaluatedPath =
-            case Dict.get (paramsPath ++ unvaluatedPath) router.routes of
-                Just a ->
-                    Just a
-
-                Nothing ->
-                    case unvaluatedPath of
-                        x :: xs ->
-                            let
-                                nextParamsPath =
-                                    paramsPath ++ [ x ]
-                            in
-                            if Set.member nextParamsPath router.paramPaths then
-                                go nextParamsPath xs
-
-                            else
-                                let
-                                    nextParamsPath_ =
-                                        paramsPath ++ [ ":param" ]
-                                in
-                                if Set.member nextParamsPath_ router.paramPaths then
-                                    go nextParamsPath_ xs
-
-                                else
-                                    Nothing
-
-                        [] ->
-                            Nothing
-    in
-    go [] path
-
-
-{-|
-
-    pathToString [ "users", "123", "new" ]
-        == "/users/123/new"
-
--}
-pathToString : List String -> String
-pathToString path =
-    "/" ++ (path |> String.join "/")
-
-
-{-| -}
-stringToPath : String -> List String
-stringToPath pathString =
-    pathString
-        |> String.split "/"
-        |> List.filter (not << String.isEmpty)
-
-
-normalizePath : String -> String
-normalizePath pathString =
-    pathString
-        |> stringToPath
-        |> pathToString
-
-
-{-| -}
-withParams : RouteParams -> Route -> Maybe Route
-withParams params (Route route) =
-    let
-        params_ : Set String
-        params_ =
-            Set.fromList (Dict.keys params.pathParams)
-    in
-    if not (Set.isEmpty (Set.diff route.definition.requiredParams params_)) then
-        Nothing
-
-    else
-        Just
-            (Route
-                { definition = route.definition
-                , params = params
-                }
-            )
-
-
-{-|
-
-    pathParams [ "users", ":userId" ] [ "users", "123" ]
-        == Just (Dict.fromList [ ( "userId", "123" ) ])
-
--}
-pathParams : List String -> List String -> Maybe (Dict String String)
-pathParams defPath path =
-    let
-        go : List String -> List String -> Maybe (Dict String String) -> Maybe (Dict String String)
-        go defPath_ path_ params =
-            case ( defPath_, path_ ) of
-                ( defPathHead :: defPathTail, pathHead :: pathTail ) ->
-                    if String.startsWith ":" defPathHead then
-                        params
-                            |> Maybe.withDefault Dict.empty
-                            |> Dict.insert defPathHead pathHead
-                            |> Just
-                            |> go defPathTail pathTail
-
-                    else if defPathHead == pathHead then
-                        go defPathTail pathTail params
-
-                    else
-                        Nothing
-
-                ( [], [] ) ->
-                    params
+                ( Nothing, Just _ ) ->
+                    Just defaultRouteData
 
                 _ ->
                     Nothing
-    in
-    go defPath path (Just Dict.empty)
+        )
 
 
-{-|
 
-    queryParams (Just "a=1&a=2&b=true")
-        == Dict.fromList [ ( "a", [ "1", "2" ] ), ( "b", "true" ) ]
+-- Router Helpers
 
--}
-queryParams : Maybe String -> Dict String (List String)
-queryParams qs =
-    let
-        addQueryParam : String -> String -> Dict String (List String) -> Dict String (List String)
-        addQueryParam key value acc =
-            Dict.update
-                key
-                (\xs ->
-                    xs
-                        |> Maybe.withDefault []
-                        |> (\xs_ -> value :: xs_)
-                        |> Just
-                )
-                acc
-    in
-    qs
-        |> Maybe.map
-            (\qs_ ->
-                qs_
-                    |> String.split "&"
-                    |> List.foldl
-                        (\query acc ->
-                            case String.split "=" query of
-                                [ key, value ] ->
-                                    addQueryParam key value acc
 
-                                _ ->
-                                    acc
-                        )
-                        Dict.empty
+routePaths : Route model msg -> List String
+routePaths route_ =
+    case route_ of
+        External _ ->
+            []
+
+        InternalLink _ ->
+            []
+
+        Internal r ->
+            r.path :: List.concatMap routePaths r.subRoutes
+
+
+toInternalPages : List (Route model msg) -> Dict String (Admin.Internal.Page.PageData model msg)
+toInternalPages routes =
+    toInternalPages_ routes Dict.empty
+
+
+toInternalPages_ : List (Route model msg) -> Dict String (Admin.Internal.Page.PageData model msg) -> Dict String (Admin.Internal.Page.PageData model msg)
+toInternalPages_ routes acc =
+    routes
+        |> List.foldl
+            (\route_ acc_ ->
+                case route_ of
+                    External _ ->
+                        acc_
+
+                    InternalLink _ ->
+                        acc_
+
+                    Internal r ->
+                        let
+                            acc__ : Dict String (Admin.Internal.Page.PageData model msg)
+                            acc__ =
+                                Dict.insert r.path r.page acc_
+                        in
+                        toInternalPages_ r.subRoutes acc__
             )
-        |> Maybe.withDefault Dict.empty
+            acc
+
+
+toNavItems : Dict String String -> List (Route model msg) -> RouteParams -> model -> List Admin.Internal.NavItem.NavItem
+toNavItems validRoutes routes params model =
+    routes
+        |> List.filterMap
+            (\route_ ->
+                case route_ of
+                    External r ->
+                        Just <| Admin.Internal.NavItem.NavItemExternal r
+
+                    InternalLink r ->
+                        Just <| Admin.Internal.NavItem.NavItemInternalLink (r params model)
+
+                    Internal r ->
+                        Dict.get r.path validRoutes
+                            |> Maybe.andThen
+                                (\path ->
+                                    if r.hidden params model then
+                                        Nothing
+
+                                    else
+                                        Just <|
+                                            Admin.Internal.NavItem.NavItemInternal
+                                                { path = path
+                                                , title =
+                                                    r.page.nav params model
+                                                        |> Maybe.withDefault ""
+                                                , children =
+                                                    toNavItems validRoutes r.subRoutes params model
+                                                }
+                                )
+            )

@@ -14,7 +14,7 @@ module Admin.Page exposing
 
 import Admin.Internal.Application
 import Admin.Internal.Page exposing (Page(..))
-import Admin.Internal.Router exposing (RouteParams)
+import Admin.Libs.Router exposing (RouteParams)
 import Admin.Shared exposing (Msg(..))
 import ElmAdmin.Internal.Form exposing (FormModel)
 import ElmAdmin.UI.Form
@@ -232,6 +232,6 @@ withView before after formModel model params_ =
     H.div []
         [ before formModel model params_
         , H.div
-            [ HA.class "eadm eadm-view" ]
+            [ HA.class "eadm eadm-view eadm-fade-slide" ]
             [ after formModel model params_ ]
         ]

@@ -8,7 +8,7 @@ module Admin.Internal.Application exposing
     )
 
 import Admin.Internal.NavItem
-import Admin.Router exposing (RouterData)
+import Admin.Internal.Router exposing (RouterData)
 import Admin.Shared exposing (Action, Effect(..), Msg(..))
 import Browser
 import Browser.Navigation
@@ -26,7 +26,7 @@ import SubModule
 import Task
 import ThemeProvider
 import Time exposing (Posix)
-import Url
+import Url exposing (Url)
 import W.Styles
 
 
@@ -36,7 +36,9 @@ type alias Admin flags model msg =
 
 type alias Model model msg =
     { navKey : Browser.Navigation.Key
+    , url : Url
     , model : model
+    , routerIndex : Maybe Int
     , routerData : Maybe (RouterData model msg)
     , darkMode : Bool
     , formModel : FormModel
@@ -54,7 +56,7 @@ type alias Model model msg =
 init :
     { init : flags -> Browser.Navigation.Key -> ( model, Action msg )
     , update : msg -> model -> ( model, Action msg )
-    , routers : List (Admin.Router.Router model msg)
+    , routers : List (Admin.Internal.Router.Router model msg)
     }
     -> flags
     -> Url.Url
@@ -69,16 +71,22 @@ init props flags url navKey =
                     , effectToMsg = GotEffect
                     }
 
-        routerData : Maybe (Admin.Router.RouterData model msg)
+        routerData : Maybe (Admin.Internal.Router.RouterData model msg)
         routerData =
-            Admin.Router.oneOf props.routers url userModel
+            Admin.Internal.Router.oneOf props.routers url userModel
+
+        routerIndex : Maybe Int
+        routerIndex =
+            Admin.Internal.Router.routerIndex props.routers userModel
 
         initialModel : Model model msg
         initialModel =
             { navKey = navKey
+            , url = url
             , model = userModel
+            , routerIndex = routerIndex
             , routerData = routerData
-            , darkMode = False
+            , darkMode = True
             , formModel = ElmAdmin.Internal.Form.empty
             , debounced = Dict.empty
             , notification = Nothing
@@ -93,7 +101,7 @@ init props flags url navKey =
 
 update :
     { update : msg -> model -> ( model, Action msg )
-    , routers : List (Admin.Router.Router model msg)
+    , routers : List (Admin.Internal.Router.Router model msg)
     }
     -> Msg msg
     -> Model model msg
@@ -127,9 +135,9 @@ update props msg model =
 
         OnUrlChange url ->
             let
-                routerData : Maybe (Admin.Router.RouterData model msg)
+                routerData : Maybe (Admin.Internal.Router.RouterData model msg)
                 routerData =
-                    Admin.Router.oneOf props.routers url model.model
+                    Admin.Internal.Router.oneOf props.routers url model.model
 
                 model_ : Model model msg
                 model_ =
@@ -174,12 +182,29 @@ update props msg model =
             update props msg_ model_
 
         GotMsg msg_ ->
-            props.update msg_ model.model
-                |> SubModule.updateWithEffect
-                    { toModel = \m -> { model | model = m }
-                    , toMsg = GotMsg
-                    , effectToMsg = GotEffect
-                    }
+            let
+                ( model_, cmd ) =
+                    props.update msg_ model.model
+                        |> SubModule.updateWithEffect
+                            { toModel = \m -> { model | model = m }
+                            , toMsg = GotMsg
+                            , effectToMsg = GotEffect
+                            }
+
+                routerIndex : Maybe Int
+                routerIndex =
+                    Admin.Internal.Router.routerIndex props.routers model_.model
+            in
+            if routerIndex /= model.routerIndex then
+                ( { model_ | routerIndex = routerIndex }
+                , Cmd.batch
+                    [ Browser.Navigation.replaceUrl model.navKey model.url.path
+                    , cmd
+                    ]
+                )
+
+            else
+                ( model_, cmd )
 
         GotEffect effect ->
             case effect of
@@ -414,7 +439,7 @@ view props model =
                 |> Maybe.withDefault ""
                 |> (\s ->
                         H.h2
-                            [ HA.class "eadm eadm-page-title" ]
+                            [ HA.class "eadm eadm-page-title eadm-fade" ]
                             [ H.text s ]
                    )
 

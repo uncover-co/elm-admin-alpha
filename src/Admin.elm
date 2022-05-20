@@ -12,6 +12,7 @@ module Admin exposing
 
 import Admin.Actions exposing (Action)
 import Admin.Internal.Application
+import Admin.Internal.Router
 import Admin.Router
 import Admin.Shared exposing (Msg(..))
 import Browser
@@ -36,7 +37,7 @@ type Attribute model msg
 
 
 type alias Attributes model msg =
-    { routers : List (Admin.Router.Router model msg)
+    { routers : List (Admin.Internal.Router.Router model msg)
     }
 
 
@@ -54,13 +55,13 @@ applyAttrs attrs =
 {-| -}
 router : List (Admin.Router.Route model msg) -> Attribute model msg
 router v =
-    Attribute <| \attrs -> { attrs | routers = attrs.routers ++ [ Admin.Router.router v ] }
+    Attribute <| \attrs -> { attrs | routers = attrs.routers ++ [ Admin.Internal.Router.router v ] }
 
 
 {-| -}
 protectedRouter : (model -> Maybe subModel) -> List (Admin.Router.Route subModel msg) -> Attribute model msg
 protectedRouter a b =
-    Attribute <| \attrs -> { attrs | routers = Admin.Router.protectedRouter a b :: attrs.routers }
+    Attribute <| \attrs -> { attrs | routers = Admin.Internal.Router.protectedRouter a b :: attrs.routers }
 
 
 {-| -}

@@ -10,6 +10,22 @@
  * Animations
  */
 
+@keyframes eadm-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.eadm.eadm-fade {
+  opacity: 0;
+  animation: eadm-fade 1000ms;
+  animation-delay: 200ms;
+  animation-fill-mode: forwards;
+}
+
 @keyframes eadm-fade-slide {
   from {
     opacity: 0;

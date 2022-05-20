@@ -4,7 +4,7 @@ module Admin.Internal.Page exposing
     , toPageData
     )
 
-import Admin.Internal.Router exposing (RouteParams)
+import Admin.Libs.Router exposing (RouteParams)
 import Admin.Shared exposing (Msg)
 import ElmAdmin.Internal.Form exposing (FormModel)
 import Html as H
