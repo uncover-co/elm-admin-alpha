@@ -17,6 +17,7 @@ import Admin.Internal.Router exposing (Route(..))
 import Admin.Libs.Router exposing (RouteParams)
 
 
+{-| -}
 type alias Route model msg =
     Admin.Internal.Router.Route model msg
 
@@ -92,6 +93,7 @@ route path_ props subRoutes =
         }
 
 
+{-| -}
 resource :
     String
     ->
