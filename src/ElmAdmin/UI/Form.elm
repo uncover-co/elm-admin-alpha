@@ -1,15 +1,21 @@
 module ElmAdmin.UI.Form exposing (..)
 
+import Admin.Shared exposing (Effect(..), Msg(..))
 import Dict
 import ElmAdmin.Internal.Form exposing (Field(..), FieldValue(..), Form, FormModel)
-import ElmAdmin.Shared exposing (Msg(..))
-import ElmWidgets as W
-import ElmWidgets.Attributes as WA
-import Html exposing (..)
-import Html.Attributes exposing (..)
+import Html as H exposing (..)
+import Html.Attributes as HA
 import Html.Events as HE
 import Json.Decode as D
-import Set
+import W.Button
+import W.Field
+import W.InputAutocomplete
+import W.InputCheckbox
+import W.InputRadio
+import W.InputSelect
+import W.InputSlider
+import W.InputText
+import W.Loading
 
 
 view :
@@ -49,8 +55,8 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
     form.resolver formModel model params
         |> Maybe.map
             (\( resource, errors ) ->
-                Html.form
-                    [ class "eadm eadm-card"
+                H.form
+                    [ HA.class "eadm eadm-card"
                     , HE.preventDefaultOn "submit"
                         ((\_ ->
                             if Dict.isEmpty errors then
@@ -65,8 +71,8 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                             |> D.map (\msg -> ( msg, True ))
                         )
                     ]
-                    [ p [ class "eadm eadm-form-title" ] [ text form.title ]
-                    , ul [ class "eadm eadm-form-fields" ]
+                    [ p [ HA.class "eadm eadm-form-title" ] [ text form.title ]
+                    , ul [ HA.class "eadm eadm-form-fields" ]
                         (form.fields
                             |> List.reverse
                             |> List.map
@@ -79,23 +85,15 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                 params
                                                 resource
                                                 (\_ ->
-                                                    W.field
-                                                        [ Dict.get label errors
-                                                            |> Maybe.map
-                                                                (\err ->
-                                                                    if Set.member ( form.title, label ) formModel.validated then
-                                                                        WA.danger err
-
-                                                                    else
-                                                                        WA.none
-                                                                )
-                                                            |> Maybe.withDefault WA.none
-                                                        ]
+                                                    W.Field.view
+                                                        (Dict.get label errors
+                                                            |> Maybe.map (\_ -> [])
+                                                            |> Maybe.withDefault []
+                                                        )
                                                         { label = text label
                                                         , input =
-                                                            W.textInput
-                                                                [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
-                                                                , WA.onBlur (SetValidatedField ( form.title, label ))
+                                                            W.InputText.view
+                                                                [ W.InputText.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
                                                                 ]
                                                                 { value = v
                                                                 , onInput =
@@ -111,20 +109,20 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                 params
                                                 resource
                                                 (\_ ->
-                                                    W.field
-                                                        [ Dict.get label errors
-                                                            |> Maybe.map WA.danger
-                                                            |> Maybe.withDefault WA.none
-                                                        ]
+                                                    W.Field.view
+                                                        (Dict.get label errors
+                                                            |> Maybe.map (\error -> [ W.Field.danger error ])
+                                                            |> Maybe.withDefault []
+                                                        )
                                                         { label = text label
                                                         , input =
-                                                            W.autocomplete
-                                                                [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
-                                                                , WA.onBlur (SetValidatedField ( form.title, label ))
-                                                                , f.attrs.onEnter
-                                                                    |> Maybe.map (\fn -> WA.onEnter (GotMsg (fn model params resource search)))
-                                                                    |> Maybe.withDefault WA.none
-                                                                ]
+                                                            W.InputAutocomplete.view
+                                                                (W.InputAutocomplete.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
+                                                                    :: (f.attrs.onEnter
+                                                                            |> Maybe.map (\fn -> [ W.InputAutocomplete.onEnter (GotMsg (fn model params resource search)) ])
+                                                                            |> Maybe.withDefault []
+                                                                       )
+                                                                )
                                                                 { id = label
                                                                 , search = search
                                                                 , value = value
@@ -149,17 +147,66 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                         }
                                                 )
 
+                                        ( RemoteAutocomplete f, Just (FieldValueRemoteAutocomplete ( search, value )) ) ->
+                                            ifVisible f.attrs.hidden
+                                                model
+                                                params
+                                                resource
+                                                (\_ ->
+                                                    let
+                                                        options : Maybe (List { id : String, label : String })
+                                                        options =
+                                                            Dict.get ( label, search ) formModel.remoteAutocomplete
+                                                                |> Maybe.map Result.toMaybe
+                                                                |> Maybe.withDefault (value |> Maybe.map List.singleton)
+                                                    in
+                                                    W.Field.view
+                                                        (Dict.get label errors
+                                                            |> Maybe.map (\error -> [ W.Field.danger error ])
+                                                            |> Maybe.withDefault []
+                                                        )
+                                                        { label = text label
+                                                        , input =
+                                                            W.InputAutocomplete.view
+                                                                [ W.InputAutocomplete.readOnly
+                                                                    (props.isReadOnly || f.attrs.readOnly model params resource)
+                                                                ]
+                                                                { id = label
+                                                                , search = search
+                                                                , value = value
+                                                                , options = options
+                                                                , toLabel = .label
+                                                                , onInput =
+                                                                    \search_ value__ ->
+                                                                        if String.length search_ >= 3 then
+                                                                            Batch
+                                                                                [ FetchAutocompleteOptions label
+                                                                                    search_
+                                                                                    (f.searchRequest model params search_)
+                                                                                , ( search_, value__ )
+                                                                                    |> ElmAdmin.Internal.Form.FieldValueRemoteAutocomplete
+                                                                                    |> UpdateFormField ( form.title, label )
+                                                                                ]
+
+                                                                        else
+                                                                            ( search_, value__ )
+                                                                                |> ElmAdmin.Internal.Form.FieldValueRemoteAutocomplete
+                                                                                |> UpdateFormField ( form.title, label )
+                                                                }
+                                                        }
+                                                )
+
                                         ( Checkbox f, Just (FieldValueBool v) ) ->
                                             ifVisible f.attrs.hidden
                                                 model
                                                 params
                                                 resource
                                                 (\_ ->
-                                                    W.field []
+                                                    W.Field.view []
                                                         { label = text label
                                                         , input =
-                                                            W.checkbox
-                                                                [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
+                                                            W.InputCheckbox.view
+                                                                [ W.InputCheckbox.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
                                                                 ]
                                                                 { value = v
                                                                 , onInput =
@@ -175,11 +222,11 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                 params
                                                 resource
                                                 (\_ ->
-                                                    W.field []
+                                                    W.Field.view []
                                                         { label = text label
                                                         , input =
-                                                            W.radioButtons
-                                                                [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
+                                                            W.InputRadio.view
+                                                                [ W.InputRadio.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
                                                                 ]
                                                                 { id = form.title ++ "-" ++ label
                                                                 , value = v
@@ -199,11 +246,11 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                 params
                                                 resource
                                                 (\_ ->
-                                                    W.field []
+                                                    W.Field.view []
                                                         { label = text label
                                                         , input =
-                                                            W.select
-                                                                [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
+                                                            W.InputSelect.view
+                                                                [ W.InputSelect.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
                                                                 ]
                                                                 { value = v
                                                                 , options = f.options model params
@@ -222,11 +269,11 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                 params
                                                 resource
                                                 (\_ ->
-                                                    W.field []
+                                                    W.Field.view []
                                                         { label = text label
                                                         , input =
-                                                            W.rangeInput
-                                                                [ WA.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
+                                                            W.InputSlider.view
+                                                                [ W.InputSlider.readOnly (props.isReadOnly || f.attrs.readOnly model params resource)
                                                                 ]
                                                                 { value = v
                                                                 , min = f.min
@@ -243,10 +290,10 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                             text ""
                                 )
                         )
-                    , section [ class "eadm eadm-form-footer" ]
-                        [ div [ class "eadm eadm-form-footer-inner" ]
-                            [ W.primaryButton []
-                                { label = text "Confirm"
+                    , section [ HA.class "eadm eadm-form-footer" ]
+                        [ div [ HA.class "eadm eadm-form-footer-inner" ]
+                            [ W.Button.view [ W.Button.primary ]
+                                { label = "Confirm"
                                 , onClick = DoNothing
                                 }
                             ]
@@ -258,11 +305,11 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
 
 viewLoading : Form model msg params resource -> Html (Msg msg)
 viewLoading form =
-    Html.div [ class "eadm eadm-card" ]
-        [ p [ class "eadm eadm-form-title" ] [ text form.title ]
+    H.div [ HA.class "eadm eadm-card" ]
+        [ p [ HA.class "eadm eadm-form-title" ] [ text form.title ]
         , section
-            [ class "eadm eadm-form-loading" ]
-            [ W.loadingCircle [ WA.size 32 ] ]
+            [ HA.class "eadm eadm-form-loading" ]
+            [ W.Loading.circles [ W.Loading.size 32 ] ]
         ]
 
 

@@ -1,4 +1,4 @@
-module ElmAdmin.Actions exposing
+module Admin.Actions exposing
     ( cmd, none, batch, map, Action
     , showNotification, showHighlightNotification, showSuccessNotification, showWarningNotification, showDangerNotification
     , initForm, debounce
@@ -60,9 +60,8 @@ You can trigger a notification popup from anywhere in your application through o
 
 -}
 
-import ElmAdmin.Form exposing (Form)
-import ElmAdmin.Internal.Form
-import ElmAdmin.Shared exposing (Action, Effect(..), Msg(..))
+import Admin.Form exposing (Form)
+import Admin.Shared exposing (Action, Effect(..), Msg(..))
 import ElmAdmin.UI.Notification
 import Html as H
 import SubCmd
@@ -70,7 +69,7 @@ import SubCmd
 
 {-| -}
 type alias Action msg =
-    ElmAdmin.Shared.Action msg
+    Admin.Shared.Action msg
 
 
 {-| Sends a command that will be handled by your update functions.
@@ -98,7 +97,7 @@ batch =
 -}
 map : (msgA -> msgB) -> Action msgA -> Action msgB
 map =
-    ElmAdmin.Shared.mapAction
+    Admin.Shared.mapAction
 
 
 {-| Triggers a notification that will fade out after a while.
@@ -140,9 +139,13 @@ showDangerNotification content =
 -}
 initForm : Form model msg params resource -> resource -> Action msg
 initForm form resource =
-    ElmAdmin.Internal.Form.initFields resource form
-        |> UpdateFormModel
-        |> SubCmd.effect
+    SubCmd.none
+
+
+
+-- ElmAdmin.Internal.Form.initFields resource form
+--     |> UpdateFormModel
+--     |> SubCmd.effect
 
 
 {-| Debounce a message passing a string as a debounce key and a wait time in milliseconds.

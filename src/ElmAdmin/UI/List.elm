@@ -1,10 +1,10 @@
 module ElmAdmin.UI.List exposing (view)
 
-import ElmAdmin.Shared exposing (Msg(..))
-import ElmWidgets as W
-import ElmWidgets.Attributes as WA
+import Admin.Shared exposing (Msg(..))
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import W.DataRow
+import W.Loading
 
 
 view :
@@ -14,7 +14,7 @@ view :
             (List
                 { label : Html msg
                 , actions : List (Html msg)
-                , options : List (W.DataRowAttributes msg -> W.DataRowAttributes msg)
+                , options : List (W.DataRow.Attribute msg)
                 }
             )
     }
@@ -30,10 +30,7 @@ view props =
                             |> List.map
                                 (\item ->
                                     li [ class "eadm eadm-list-item" ]
-                                        [ W.dataRow item.options
-                                            { label = item.label
-                                            , actions = item.actions
-                                            }
+                                        [ W.DataRow.view item.options [ item.label ]
                                         ]
                                 )
                         )
@@ -46,6 +43,6 @@ view props =
             Nothing ->
                 div
                     [ class "eadm eadm-list-empty" ]
-                    [ W.loadingCircle [ WA.size 32 ] ]
+                    [ W.Loading.circles [ W.Loading.size 32 ] ]
         ]
         |> Html.map GotMsg

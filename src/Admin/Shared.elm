@@ -1,44 +1,20 @@
-module ElmAdmin.Shared exposing
+module Admin.Shared exposing
     ( Action
     , Effect(..)
-    , ElmAdmin
-    , Model
     , Msg(..)
     , mapAction
     )
 
 import Browser exposing (UrlRequest)
-import Browser.Navigation
-import Dict exposing (Dict)
 import ElmAdmin.Internal.Form exposing (FieldValue, FormModel)
-import ElmAdmin.Router exposing (RouteParams)
 import ElmAdmin.UI.Notification exposing (NotificationStatus)
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Http
+import Platform exposing (Task)
 import SubCmd
 import Time exposing (Posix)
 import Url exposing (Url)
-
-
-type alias ElmAdmin flags model msg =
-    Program flags (Model model msg) (Msg msg)
-
-
-type alias Model model msg =
-    { navKey : Browser.Navigation.Key
-    , model : model
-    , routeParams : RouteParams
-    , darkMode : Bool
-    , formModel : FormModel
-    , debounced : Dict String ( Posix, Msg msg )
-    , notification :
-        Maybe
-            { id : Int
-            , status : NotificationStatus
-            , content : Html msg
-            , expiration : Posix
-            }
-    }
 
 
 type Msg msg
@@ -51,14 +27,18 @@ type Msg msg
     | GotEffect (Effect msg)
     | HideNotification Posix
     | SetNotificationExpiration Posix
+    | UpdateFormModel (FormModel -> ( FormModel, Msg msg ))
     | UpdateFormField ( String, String ) FieldValue
     | SetDebounce String Posix (Msg msg)
     | UpdateDebounced Posix
+    | FetchInitialAutocompleteOption ( String, String ) (Task Http.Error { id : String, label : String })
+    | GotInitialAutocompleteOption ( String, String ) (Result Http.Error { id : String, label : String })
+    | FetchAutocompleteOptions String String (Task Http.Error (List { id : String, label : String }))
+    | GotAutocompleteOptions String String (Result Http.Error (List { id : String, label : String }))
 
 
 type Effect msg
-    = UpdateFormModel (FormModel -> FormModel)
-    | ShowNotification NotificationStatus (Html msg)
+    = ShowNotification NotificationStatus (Html msg)
     | Debounce String Int (Msg msg)
 
 
@@ -80,6 +60,9 @@ mapMsg fn msg =
 
         GotMsg msg_ ->
             GotMsg (fn msg_)
+
+        UpdateFormModel fn_ ->
+            UpdateFormModel (fn_ >> Tuple.mapSecond (mapMsg fn))
 
         SetDebounce label time msg_ ->
             SetDebounce label time (mapMsg fn msg_)
@@ -109,13 +92,22 @@ mapMsg fn msg =
         UpdateDebounced a ->
             UpdateDebounced a
 
+        FetchInitialAutocompleteOption a b ->
+            FetchInitialAutocompleteOption a b
+
+        GotInitialAutocompleteOption a b ->
+            GotInitialAutocompleteOption a b
+
+        FetchAutocompleteOptions a b c ->
+            FetchAutocompleteOptions a b c
+
+        GotAutocompleteOptions a b c ->
+            GotAutocompleteOptions a b c
+
 
 mapEffect : (msgA -> msgB) -> Effect msgA -> Effect msgB
 mapEffect fn effect =
     case effect of
-        UpdateFormModel fn_ ->
-            UpdateFormModel fn_
-
         ShowNotification status html ->
             ShowNotification status (Html.map fn html)
 
@@ -128,9 +120,6 @@ mapAction fn action =
     SubCmd.mapBoth fn
         (\effect ->
             case effect of
-                UpdateFormModel fn_ ->
-                    UpdateFormModel fn_
-
                 ShowNotification status html ->
                     ShowNotification status (Html.map fn html)
 
