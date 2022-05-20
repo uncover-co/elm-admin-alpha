@@ -41,9 +41,9 @@ module ElmAdmin.Page exposing
 
 -}
 
+import Admin.Form
 import Dict
 import ElmAdmin.Actions
-import ElmAdmin.Form
 import ElmAdmin.Internal.Page
 import ElmAdmin.Router exposing (RouteParams)
 import ElmAdmin.Shared exposing (Action, Effect(..), Msg(..))

@@ -5,17 +5,26 @@ module ElmAdmin.Internal.Form exposing
     , FormBuilder
     , FormModel
     , empty
-    , initFields
     )
 
 import Dict exposing (Dict)
+import Http
+import Platform exposing (Task)
 import Set exposing (Set)
 
 
 type alias FormModel =
     { initialized : Set String
-    , validated : Set ( String, String )
+    , remoteAutocomplete : Dict ( String, String ) (Result Http.Error (List { id : String, label : String }))
     , values : Dict ( String, String ) FieldValue
+    }
+
+
+empty : FormModel
+empty =
+    { initialized = Set.empty
+    , remoteAutocomplete = Dict.empty
+    , values = Dict.empty
     }
 
 
@@ -24,6 +33,7 @@ type FieldValue
     | FieldValueFloat Float
     | FieldValueBool Bool
     | FieldValueAutocomplete ( String, Maybe String )
+    | FieldValueRemoteAutocomplete ( String, Maybe { id : String, label : String } )
 
 
 type alias Form model msg params resource =
@@ -55,6 +65,16 @@ type Field model msg params resource
             , readOnly : model -> params -> resource -> Bool
             , onSearch : Maybe (model -> params -> resource -> String -> msg)
             , onEnter : Maybe (model -> params -> resource -> String -> msg)
+            }
+        }
+    | RemoteAutocomplete
+        { value : resource -> Maybe String
+        , initRequest : model -> params -> String -> Task Http.Error { id : String, label : String }
+        , searchRequest : model -> params -> String -> Task Http.Error (List { id : String, label : String })
+        , attrs :
+            { required : Bool
+            , hidden : model -> params -> resource -> Bool
+            , readOnly : model -> params -> resource -> Bool
             }
         }
     | Checkbox
@@ -90,50 +110,3 @@ type Field model msg params resource
             , readOnly : model -> params -> resource -> Bool
             }
         }
-
-
-initFields : resource -> Form msg model params resource -> FormModel -> FormModel
-initFields resource form_ formModel =
-    { initialized =
-        Set.insert form_.title formModel.initialized
-    , validated = formModel.validated
-    , values =
-        form_.fields
-            |> List.map
-                (\( label, field ) ->
-                    let
-                        fieldValue =
-                            case field of
-                                Text { value } ->
-                                    FieldValueString <| value resource
-
-                                Autocomplete { value } ->
-                                    value resource
-                                        |> Maybe.map (\v -> FieldValueAutocomplete ( v, value resource ))
-                                        |> Maybe.withDefault (FieldValueAutocomplete ( "", Nothing ))
-
-                                Checkbox { value } ->
-                                    FieldValueBool <| value resource
-
-                                Radio { value } ->
-                                    FieldValueString <| value resource
-
-                                Select { value } ->
-                                    FieldValueString <| value resource
-
-                                Range { value } ->
-                                    FieldValueFloat <| value resource
-                    in
-                    ( ( form_.title, label ), fieldValue )
-                )
-            |> Dict.fromList
-            |> (\v_ -> Dict.union v_ formModel.values)
-    }
-
-
-empty : FormModel
-empty =
-    { initialized = Set.empty
-    , validated = Set.empty
-    , values = Dict.empty
-    }

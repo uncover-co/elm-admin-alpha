@@ -60,9 +60,8 @@ You can trigger a notification popup from anywhere in your application through o
 
 -}
 
+import Admin.Form exposing (Form)
 import Admin.Shared exposing (Action, Effect(..), Msg(..))
-import ElmAdmin.Form exposing (Form)
-import ElmAdmin.Internal.Form
 import ElmAdmin.UI.Notification
 import Html as H
 import SubCmd
@@ -140,9 +139,13 @@ showDangerNotification content =
 -}
 initForm : Form model msg params resource -> resource -> Action msg
 initForm form resource =
-    ElmAdmin.Internal.Form.initFields resource form
-        |> UpdateFormModel
-        |> SubCmd.effect
+    SubCmd.none
+
+
+
+-- ElmAdmin.Internal.Form.initFields resource form
+--     |> UpdateFormModel
+--     |> SubCmd.effect
 
 
 {-| Debounce a message passing a string as a debounce key and a wait time in milliseconds.

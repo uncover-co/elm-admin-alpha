@@ -1,6 +1,6 @@
 module ElmAdmin.UI.List exposing (view)
 
-import ElmAdmin.Shared exposing (Msg(..))
+import Admin.Shared exposing (Msg(..))
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import W.DataRow

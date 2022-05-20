@@ -1,7 +1,8 @@
-module ElmAdmin.Form exposing
+module Admin.Form exposing
     ( form, Form, Field
     , text, TextAttributes
     , autocomplete, AutocompleteAttributes
+    , remoteAutocomplete, RemoteAutocompleteAttributes
     , checkbox, CheckboxAttributes
     , radio, RadioAttributes
     , select, SelectAttributes
@@ -25,6 +26,11 @@ module ElmAdmin.Form exposing
 ## Autocomplete
 
 @docs autocomplete, AutocompleteAttributes
+
+
+## Remote Autocomplete
+
+@docs remoteAutocomplete, RemoteAutocompleteAttributes
 
 
 ## Checkbox
@@ -56,6 +62,8 @@ module ElmAdmin.Form exposing
 import Dict
 import ElmAdmin.Internal.Form exposing (Field(..), FieldValue(..), FormBuilder)
 import ElmAdmin.Libs.List
+import Http
+import Platform exposing (Task)
 
 
 {-| -}
@@ -223,6 +231,68 @@ autocomplete props f =
                                             errors
                                 in
                                 Just ( resolver value_, errors_ )
+
+                            _ ->
+                                Nothing
+                    )
+    }
+
+
+
+-- RemoteAutocompleteField
+
+
+{-| -}
+type alias RemoteAutocompleteAttributes model params resource =
+    { required : Bool
+    , hidden : model -> params -> resource -> Bool
+    , readOnly : model -> params -> resource -> Bool
+    }
+
+
+remoteAutocompleteDefaults : RemoteAutocompleteAttributes model params resource
+remoteAutocompleteDefaults =
+    { required = False
+    , hidden = \_ _ _ -> False
+    , readOnly = \_ _ _ -> False
+    }
+
+
+{-| -}
+remoteAutocomplete :
+    { label : String
+    , value : resource -> Maybe String
+    , initRequest : model -> params -> String -> Task Http.Error { id : String, label : String }
+    , searchRequest : model -> params -> String -> Task Http.Error (List { id : String, label : String })
+    , attrs : List (RemoteAutocompleteAttributes model params resource -> RemoteAutocompleteAttributes model params resource)
+    }
+    -> FormBuilder model msg params resource (Maybe String -> a)
+    -> FormBuilder model msg params resource a
+remoteAutocomplete props f =
+    let
+        attrs : RemoteAutocompleteAttributes model params resource
+        attrs =
+            List.foldl (\fn a -> fn a) remoteAutocompleteDefaults props.attrs
+    in
+    { title = f.title
+    , fields =
+        ( props.label
+        , RemoteAutocomplete
+            { value = props.value
+            , initRequest = props.initRequest
+            , searchRequest = props.searchRequest
+            , attrs = attrs
+            }
+        )
+            :: f.fields
+    , resolver =
+        \formModel model params ->
+            f.resolver formModel model params
+                |> Maybe.andThen
+                    (\( resolver, errors ) ->
+                        case Dict.get ( f.title, props.label ) formModel.values of
+                            Just (FieldValueRemoteAutocomplete ( _, v )) ->
+                                Just ( resolver (Maybe.map .id v), errors )
 
                             _ ->
                                 Nothing

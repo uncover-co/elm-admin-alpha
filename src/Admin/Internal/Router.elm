@@ -2,7 +2,8 @@ module Admin.Internal.Router exposing
     ( empty, insert, fromList, toList, Router
     , findByUrl, findByString, toPathId, toPath, toParams, withParams, Route, RouteParams
     , validRoutes
-    , routeWithQueryParams
+    , normalizePath
+    , defaultValidRoutes, emptyParams
     )
 
 {-|
@@ -10,11 +11,11 @@ module Admin.Internal.Router exposing
 @docs empty, insert, fromList, toList, Router
 @docs findByUrl, findByString, toPathId, toPath, toParams, withParams, Route, RouteParams
 @docs validRoutes
+@docs normalizePath
 
 -}
 
 import Dict exposing (Dict)
-import ElmAdmin.Router exposing (pathToString)
 import Set exposing (Set)
 import Url exposing (Url)
 
@@ -66,6 +67,13 @@ toParams (Route route_) =
     route_.params
 
 
+emptyParams : RouteParams
+emptyParams =
+    { pathParams = Dict.empty
+    , queryParams = Dict.empty
+    }
+
+
 validRoutes : Route -> Router -> Dict String String
 validRoutes (Route route) (Router router) =
     let
@@ -93,6 +101,24 @@ validRoutes (Route route) (Router router) =
                 |> Dict.fromList
     in
     validRoutes_
+
+
+defaultValidRoutes : Router -> Dict String String
+defaultValidRoutes (Router router) =
+    router.routes
+        |> Dict.values
+        |> List.filterMap
+            (\r ->
+                if not (Set.isEmpty r.requiredParams) then
+                    Nothing
+
+                else
+                    Just
+                        ( r.path
+                        , toPath_ Dict.empty r.path
+                        )
+            )
+        |> Dict.fromList
 
 
 empty : Router
@@ -160,36 +186,20 @@ insert pathString (Router router) =
 
 
 {-| -}
-findByUrl :
-    { url : Url
-    , forceCacheUpdate : Bool
-    , router : Router
-    }
-    -> Maybe Route
-findByUrl props =
-    findByString
-        { path = props.url.path
-        , query = props.url.query
-        , forceCacheUpdate = props.forceCacheUpdate
-        , router = props.router
-        }
+findByUrl : Url -> Router -> Maybe Route
+findByUrl url router =
+    findByString url.path url.query router
 
 
 {-| -}
-findByString :
-    { path : String
-    , query : Maybe String
-    , forceCacheUpdate : Bool
-    , router : Router
-    }
-    -> Maybe Route
-findByString props =
+findByString : String -> Maybe String -> Router -> Maybe Route
+findByString pathString query router =
     let
         path : List String
         path =
-            stringToPath props.path
+            stringToPath pathString
     in
-    getPathDefinition props.router path
+    getPathDefinition router path
         |> Maybe.andThen
             (\pathDef ->
                 pathParams pathDef.pathList path
@@ -197,21 +207,10 @@ findByString props =
                         (\pathParams_ ->
                             Route
                                 { definition = pathDef
-                                , params = RouteParams pathParams_ (queryParams props.query)
+                                , params = RouteParams pathParams_ (queryParams query)
                                 }
                         )
             )
-
-
-routeWithQueryParams : Maybe String -> Route -> Route
-routeWithQueryParams query (Route route) =
-    Route
-        { definition = route.definition
-        , params =
-            { pathParams = route.params.pathParams
-            , queryParams = queryParams query
-            }
-        }
 
 
 {-| -}

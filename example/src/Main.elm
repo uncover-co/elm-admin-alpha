@@ -1,11 +1,17 @@
 module Main exposing (main)
 
-import Admin as A exposing (ElmAdmin)
-import ElmAdmin.Actions as AA
-import ElmAdmin.Form as AF
-import ElmAdmin.Page as AP
+import Admin as A exposing (Admin)
+import Admin.Actions as AA
+import Admin.Form as AF
+import Admin.Http
+import Admin.Page as AP
+import Admin.Router as AR
+import Browser.Navigation
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Http exposing (Error(..), Response(..))
+import Json.Decode as D
+import Platform exposing (Task)
 import Set exposing (Set)
 
 
@@ -14,12 +20,13 @@ import Set exposing (Set)
 
 
 type Model
-    = SignedOut
+    = SignedOut Browser.Navigation.Key
     | SignedIn SignedInModel
 
 
 type alias SignedInModel =
-    { user : User
+    { navKey : Browser.Navigation.Key
+    , user : User
     , users : List User
     , posts : List Post
     , nicknames : Set String
@@ -73,17 +80,19 @@ update msg model =
             signedInUpdate msg m
                 |> Tuple.mapFirst SignedIn
 
-        SignedOut ->
+        SignedOut navKey ->
             case msg of
                 SignIn user ->
                     ( SignedIn
-                        { user = user
+                        { navKey = navKey
+                        , user = user
                         , users = [ user ]
                         , posts = []
                         , nicknames = Set.fromList [ "Georges", "Boris", "Elmhead" ]
                         , validNicknames = Just []
                         }
-                    , AA.none
+                    , AA.cmd <|
+                        Browser.Navigation.pushUrl navKey "/posts"
                     )
 
                 _ ->
@@ -172,6 +181,45 @@ emptyPostForm =
 
 
 
+-- Pokemon API
+-- Admin.Http.get
+--     { url : String
+--     , headers : []
+--     , decoder : D.Decoder a
+--     }
+--     -> Task Http.Error a
+-- Admin.Http.get
+
+
+fetchPokemon : String -> Task Http.Error { id : String, label : String }
+fetchPokemon id =
+    Admin.Http.get
+        { url = "https://pokeapi.co/api/v2/pokemon/" ++ id
+        , headers = []
+        , decoder =
+            D.map2 (\id_ name -> { id = String.fromInt id_, label = name })
+                (D.field "id" D.int)
+                (D.field "name" D.string)
+        }
+
+
+searchPokemon : Task Http.Error (List { id : String, label : String })
+searchPokemon =
+    Admin.Http.get
+        { url = "https://pokeapi.co/api/v2/pokemon"
+        , headers = []
+        , decoder =
+            D.field "results"
+                (D.list
+                    (D.map2 (\id name -> { id = id, label = name })
+                        (D.field "name" D.string)
+                        (D.field "name" D.string)
+                    )
+                )
+        }
+
+
+
 -- Pages
 
 
@@ -180,7 +228,7 @@ pageHome =
     AP.page "Welcome"
         |> AP.card
             (\_ _ ->
-                div [ style "padding" "20px" ]
+                div [ style "padding" "20px 20px 1800px" ]
                     [ text "Welcome to our homepage!" ]
             )
 
@@ -194,8 +242,15 @@ pageSignIn =
             , attrs = []
             , form =
                 AF.form "Create User"
-                    User
+                    (\name _ -> User name)
                     |> AF.text "Name" .name []
+                    |> AF.remoteAutocomplete
+                        { label = "Favorite Pokemon"
+                        , value = \_ -> Just "1"
+                        , initRequest = \_ _ id -> fetchPokemon id
+                        , searchRequest = \_ _ _ -> searchPokemon
+                        , attrs = []
+                        }
             }
 
 
@@ -255,33 +310,35 @@ pagePosts =
             }
 
 
-main : ElmAdmin () Model Msg
+main : Admin () Model Msg
 main =
     A.adminWithActions
         { title = "Admin"
-        , init = \_ _ -> ( SignedOut, AA.none )
-        , update = \_ -> update
-        , subscriptions = \_ _ -> Sub.none
+        , init = \_ navKey -> ( SignedOut navKey, AA.none )
+        , update = update
+        , subscriptions = \_ -> Sub.none
         }
-        [ A.theme [ A.preferDarkMode ]
-        , A.pages
-            [ A.route "/"
-                { page = pageHome
-                , options = [ A.alwaysHidden ]
-                }
-                []
-            , A.folderGroup "/sign-in"
-                pageSignIn
-                [ A.external "/sign-in/go" "Go" ]
-            ]
-        , A.protectedPages
-            { fromModel = signedIn
-            , toModel = \_ -> SignedIn
-            }
-            [ A.route "/posts"
+        [ A.protectedRouter signedIn
+            [ AR.route "/posts"
                 { page = pagePosts
                 , options = []
                 }
                 []
+            ]
+        , A.router
+            [ AR.route "/"
+                { page = pageHome
+                , options = []
+                }
+                []
+            , AR.route "/sign-in"
+                { page = pageSignIn
+                , options = []
+                }
+                [ AR.external
+                    { url = "/sign-in/go"
+                    , label = "Go"
+                    }
+                ]
             ]
         ]

@@ -44,34 +44,21 @@ suite =
         , test "`findByString` searches for a matching route based on a path string" <|
             \_ ->
                 equal
-                    (Admin.Internal.Router.findByString
-                        { path = "/users/123"
-                        , query = Nothing
-                        , forceCacheUpdate = False
-                        , router = router
-                        }
+                    (Admin.Internal.Router.findByString "/users/123" Nothing router
                         |> Maybe.map Admin.Internal.Router.toPathId
                     )
                     (Just "/users/:userId")
         , test "`findByUrl` searches for a matching route based on a Url" <|
             \_ ->
                 equal
-                    (Admin.Internal.Router.findByUrl
-                        { url = exampleUrl
-                        , forceCacheUpdate = False
-                        , router = router
-                        }
+                    (Admin.Internal.Router.findByUrl exampleUrl router
                         |> Maybe.map Admin.Internal.Router.toPathId
                     )
                     (Just "/users/:userId")
         , test "`validRoutes` returns all paths resolved by the current path params" <|
             \_ ->
                 equal
-                    (Admin.Internal.Router.findByUrl
-                        { url = exampleUrl
-                        , forceCacheUpdate = False
-                        , router = router
-                        }
+                    (Admin.Internal.Router.findByUrl exampleUrl router
                         |> Maybe.map (\r -> Admin.Internal.Router.validRoutes r router)
                     )
                     (Just

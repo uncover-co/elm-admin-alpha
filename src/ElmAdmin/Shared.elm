@@ -51,7 +51,6 @@ type Msg msg
     | GotEffect (Effect msg)
     | HideNotification Posix
     | SetNotificationExpiration Posix
-    | SetValidatedField ( String, String )
     | UpdateFormField ( String, String ) FieldValue
     | SetDebounce String Posix (Msg msg)
     | UpdateDebounced Posix
@@ -103,9 +102,6 @@ mapMsg fn msg =
 
         SetNotificationExpiration a ->
             SetNotificationExpiration a
-
-        SetValidatedField a ->
-            SetValidatedField a
 
         UpdateFormField a b ->
             UpdateFormField a b
