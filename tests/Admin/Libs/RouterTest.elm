@@ -28,7 +28,7 @@ exampleUrl =
     }
 
 
-router : Admin.Internal.Router.Router
+router : Admin.Libs.Router.Router
 router =
     Admin.Libs.Router.fromList routes
 

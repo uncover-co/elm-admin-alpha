@@ -4,9 +4,10 @@ module Admin.Internal.Page exposing
     , toPageData
     )
 
+import Admin.Internal.Form exposing (FieldValue, FormModel)
 import Admin.Libs.Router exposing (RouteParams)
 import Admin.Shared exposing (Msg)
-import ElmAdmin.Internal.Form exposing (FormModel)
+import Dict exposing (Dict)
 import Html as H
 
 
@@ -17,7 +18,14 @@ type Page model msg params
         , title : model -> params -> String
         , nav : model -> params -> String
         , init : model -> params -> Maybe (Msg msg)
-        , view : FormModel -> model -> params -> H.Html (Msg msg)
+        , view : Dict String FormModel -> model -> params -> H.Html (Msg msg)
+        , forms :
+            List
+                ( String
+                , params
+                  -> model
+                  -> Maybe { values : Dict String FieldValue, initMsg : Msg msg }
+                )
         }
 
 
@@ -25,7 +33,14 @@ type alias PageData model msg =
     { title : RouteParams -> model -> Maybe String
     , nav : RouteParams -> model -> Maybe String
     , init : RouteParams -> model -> Maybe (Msg msg)
-    , view : FormModel -> RouteParams -> model -> H.Html (Msg msg)
+    , view : Dict String FormModel -> RouteParams -> model -> H.Html (Msg msg)
+    , forms :
+        RouteParams
+        ->
+            List
+                ( String
+                , model -> Maybe { values : Dict String FieldValue, initMsg : Msg msg }
+                )
     }
 
 
@@ -48,4 +63,9 @@ toPageData (Page p) =
             p.toParams routeParams
                 |> Maybe.map (\params_ -> p.view formModel model_ params_)
                 |> Maybe.withDefault (H.text "")
+    , forms =
+        \routeParams ->
+            p.toParams routeParams
+                |> Maybe.map (\params_ -> List.map (Tuple.mapSecond (\fn -> fn params_)) p.forms)
+                |> Maybe.withDefault []
     }

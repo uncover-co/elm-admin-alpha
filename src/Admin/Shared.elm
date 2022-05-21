@@ -5,8 +5,8 @@ module Admin.Shared exposing
     , mapAction
     )
 
+import Admin.Internal.Form exposing (FieldValue)
 import Browser exposing (UrlRequest)
-import ElmAdmin.Internal.Form exposing (FieldValue, FormModel)
 import ElmAdmin.UI.Notification exposing (NotificationStatus)
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -27,14 +27,13 @@ type Msg msg
     | GotEffect (Effect msg)
     | HideNotification Posix
     | SetNotificationExpiration Posix
-    | UpdateFormModel (FormModel -> ( FormModel, Msg msg ))
-    | UpdateFormField ( String, String ) FieldValue
+    | UpdateFormField String String FieldValue
     | SetDebounce String Posix (Msg msg)
     | UpdateDebounced Posix
-    | FetchInitialAutocompleteOption ( String, String ) (Task Http.Error { id : String, label : String })
-    | GotInitialAutocompleteOption ( String, String ) (Result Http.Error { id : String, label : String })
-    | FetchAutocompleteOptions String String (Task Http.Error (List { id : String, label : String }))
-    | GotAutocompleteOptions String String (Result Http.Error (List { id : String, label : String }))
+    | FetchInitialAutocompleteOption String String (Task Http.Error { id : String, label : String })
+    | GotInitialAutocompleteOption String String (Result Http.Error { id : String, label : String })
+    | FetchAutocompleteOptions String String String (Task Http.Error (List { id : String, label : String }))
+    | GotAutocompleteOptions String String String (Result Http.Error (List { id : String, label : String }))
 
 
 type Effect msg
@@ -61,9 +60,6 @@ mapMsg fn msg =
         GotMsg msg_ ->
             GotMsg (fn msg_)
 
-        UpdateFormModel fn_ ->
-            UpdateFormModel (fn_ >> Tuple.mapSecond (mapMsg fn))
-
         SetDebounce label time msg_ ->
             SetDebounce label time (mapMsg fn msg_)
 
@@ -86,23 +82,23 @@ mapMsg fn msg =
         SetNotificationExpiration a ->
             SetNotificationExpiration a
 
-        UpdateFormField a b ->
-            UpdateFormField a b
+        UpdateFormField a b c ->
+            UpdateFormField a b c
 
         UpdateDebounced a ->
             UpdateDebounced a
 
-        FetchInitialAutocompleteOption a b ->
-            FetchInitialAutocompleteOption a b
+        FetchInitialAutocompleteOption a b c ->
+            FetchInitialAutocompleteOption a b c
 
-        GotInitialAutocompleteOption a b ->
-            GotInitialAutocompleteOption a b
+        GotInitialAutocompleteOption a b c ->
+            GotInitialAutocompleteOption a b c
 
-        FetchAutocompleteOptions a b c ->
-            FetchAutocompleteOptions a b c
+        FetchAutocompleteOptions a b c d ->
+            FetchAutocompleteOptions a b c d
 
-        GotAutocompleteOptions a b c ->
-            GotAutocompleteOptions a b c
+        GotAutocompleteOptions a b c d ->
+            GotAutocompleteOptions a b c d
 
 
 mapEffect : (msgA -> msgB) -> Effect msgA -> Effect msgB

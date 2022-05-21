@@ -8,13 +8,14 @@ module Admin.Internal.Router exposing
     , routerIndex
     )
 
+import Admin.Internal.Form exposing (FieldValue, FormModel)
 import Admin.Internal.NavItem
 import Admin.Internal.Page exposing (PageData)
 import Admin.Libs.Router exposing (RouteParams)
 import Admin.Shared exposing (Msg)
 import Dict exposing (Dict)
-import ElmAdmin.Internal.Form exposing (FormModel)
 import Html as H
+import Set exposing (Set)
 import Url exposing (Url)
 
 
@@ -41,9 +42,12 @@ type Router model msg
 type alias RouterData model msg =
     { navItems : model -> Maybe (List Admin.Internal.NavItem.NavItem)
     , path : String
+    , formInits : Dict String (model -> Maybe { values : Dict String FieldValue, initMsg : Msg msg })
+    , formLoading : Set String
+    , forms : Dict String FormModel
     , title : model -> Maybe String
     , init : model -> Maybe (Msg msg)
-    , view : FormModel -> model -> H.Html (Msg msg)
+    , view : Dict String FormModel -> model -> H.Html (Msg msg)
     }
 
 
@@ -115,6 +119,9 @@ protectedRouter fromModel routes =
         defaultRouteData : RouterData model msg
         defaultRouteData =
             { path = "/"
+            , forms = Dict.empty
+            , formLoading = Set.empty
+            , formInits = Dict.empty
             , navItems =
                 \model ->
                     fromModel model
@@ -145,7 +152,18 @@ protectedRouter fromModel routes =
                     maybePage
                         |> Maybe.map
                             (\page_ ->
+                                let
+                                    forms_ : List ( String, subModel -> Maybe { values : Dict String FieldValue, initMsg : Msg msg } )
+                                    forms_ =
+                                        page_.forms params
+                                in
                                 { path = Admin.Libs.Router.toPath route_
+                                , forms = Dict.empty
+                                , formLoading = Set.fromList <| List.map Tuple.first forms_
+                                , formInits =
+                                    forms_
+                                        |> List.map (Tuple.mapSecond (\fn -> fromModel >> Maybe.andThen fn))
+                                        |> Dict.fromList
                                 , navItems =
                                     \model ->
                                         fromModel model

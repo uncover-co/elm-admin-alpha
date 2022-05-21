@@ -59,8 +59,8 @@ module Admin.Form exposing
 
 -}
 
+import Admin.Internal.Form exposing (Field(..), FieldValue(..), FormBuilder)
 import Dict
-import ElmAdmin.Internal.Form exposing (Field(..), FieldValue(..), FormBuilder)
 import ElmAdmin.Libs.List
 import Http
 import Platform exposing (Task)
@@ -68,12 +68,12 @@ import Platform exposing (Task)
 
 {-| -}
 type alias Field model msg params resource =
-    ElmAdmin.Internal.Form.Field model msg params resource
+    Admin.Internal.Form.Field model msg params resource
 
 
 {-| -}
 type alias Form model msg params resource =
-    ElmAdmin.Internal.Form.Form model msg params resource
+    Admin.Internal.Form.Form model msg params resource
 
 
 {-| -}
@@ -131,7 +131,7 @@ text label value attrs_ f =
             f.resolver formModel model params
                 |> Maybe.andThen
                     (\( resolver, errors ) ->
-                        case Dict.get ( f.title, label ) formModel.values of
+                        case Dict.get label formModel.values of
                             Just (FieldValueString v) ->
                                 if attrs.required && v == "" then
                                     Just ( resolver v, Dict.insert label "Can't be blank" errors )
@@ -210,7 +210,7 @@ autocomplete props f =
             f.resolver formModel model params
                 |> Maybe.andThen
                     (\( resolver, errors ) ->
-                        case Dict.get ( f.title, props.label ) formModel.values of
+                        case Dict.get props.label formModel.values of
                             Just (FieldValueAutocomplete ( _, v )) ->
                                 let
                                     value_ =
@@ -290,7 +290,7 @@ remoteAutocomplete props f =
             f.resolver formModel model params
                 |> Maybe.andThen
                     (\( resolver, errors ) ->
-                        case Dict.get ( f.title, props.label ) formModel.values of
+                        case Dict.get props.label formModel.values of
                             Just (FieldValueRemoteAutocomplete ( _, v )) ->
                                 Just ( resolver (Maybe.map .id v), errors )
 
@@ -344,7 +344,7 @@ checkbox label value attrs_ f =
             f.resolver formModel model params
                 |> Maybe.andThen
                     (\( resolver, errors ) ->
-                        case Dict.get ( f.title, label ) formModel.values of
+                        case Dict.get label formModel.values of
                             Just (FieldValueBool v) ->
                                 Just ( resolver v, errors )
 
@@ -402,7 +402,7 @@ radio props f =
             f.resolver formModel model params
                 |> Maybe.andThen
                     (\( resolver, errors ) ->
-                        case Dict.get ( f.title, props.label ) formModel.values of
+                        case Dict.get props.label formModel.values of
                             Just (FieldValueString v) ->
                                 props.options model params
                                     |> ElmAdmin.Libs.List.find
@@ -463,7 +463,7 @@ select props f =
             f.resolver formModel model params
                 |> Maybe.andThen
                     (\( resolver, errors ) ->
-                        case Dict.get ( f.title, props.label ) formModel.values of
+                        case Dict.get props.label formModel.values of
                             Just (FieldValueString v) ->
                                 props.options model params
                                     |> ElmAdmin.Libs.List.find
@@ -527,7 +527,7 @@ range props f =
             f.resolver formModel model params
                 |> Maybe.andThen
                     (\( resolver, errors ) ->
-                        case Dict.get ( f.title, props.label ) formModel.values of
+                        case Dict.get props.label formModel.values of
                             Just (FieldValueFloat v) ->
                                 Just ( resolver v, errors )
 

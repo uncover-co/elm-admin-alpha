@@ -1,8 +1,8 @@
 module ElmAdmin.UI.Form exposing (..)
 
+import Admin.Internal.Form exposing (Field(..), FieldValue(..), Form, FormModel)
 import Admin.Shared exposing (Effect(..), Msg(..))
 import Dict
-import ElmAdmin.Internal.Form exposing (Field(..), FieldValue(..), Form, FormModel)
 import Html as H exposing (..)
 import Html.Attributes as HA
 import Html.Events as HE
@@ -19,7 +19,7 @@ import W.Loading
 
 
 view :
-    { formModel : FormModel
+    { formId : String
     , model : model
     , params : params
     , form : Form model msg params resource
@@ -28,8 +28,9 @@ view :
     , isReadOnly : Bool
     , onSubmit : model -> params -> resource -> msg
     }
+    -> Maybe FormModel
     -> Html (Msg msg)
-view props =
+view props formModel =
     if props.isHidden then
         text ""
 
@@ -37,11 +38,13 @@ view props =
         viewLoading props.form
 
     else
-        viewForm props
+        formModel
+            |> Maybe.map (viewForm props)
+            |> Maybe.withDefault (text "")
 
 
 viewForm :
-    { formModel : FormModel
+    { formId : String
     , model : model
     , params : params
     , form : Form model msg params resource
@@ -50,8 +53,9 @@ viewForm :
     , isReadOnly : Bool
     , onSubmit : model -> params -> resource -> msg
     }
+    -> FormModel
     -> Html (Msg msg)
-viewForm ({ formModel, model, params, form, onSubmit } as props) =
+viewForm ({ model, params, form, onSubmit } as props) formModel =
     form.resolver formModel model params
         |> Maybe.map
             (\( resource, errors ) ->
@@ -77,7 +81,7 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                             |> List.reverse
                             |> List.map
                                 (\( label, field ) ->
-                                    case ( field, Dict.get ( form.title, label ) formModel.values ) of
+                                    case ( field, Dict.get label formModel.values ) of
                                         ( Text f, Just (FieldValueString v) ) ->
                                             ifVisible
                                                 f.attrs.hidden
@@ -97,8 +101,8 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                                 ]
                                                                 { value = v
                                                                 , onInput =
-                                                                    ElmAdmin.Internal.Form.FieldValueString
-                                                                        >> UpdateFormField ( form.title, label )
+                                                                    Admin.Internal.Form.FieldValueString
+                                                                        >> UpdateFormField props.formId label
                                                                 }
                                                         }
                                                 )
@@ -134,15 +138,15 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                                             Just onSearch ->
                                                                                 Batch
                                                                                     [ ( search_, value_ )
-                                                                                        |> ElmAdmin.Internal.Form.FieldValueAutocomplete
-                                                                                        |> UpdateFormField ( form.title, label )
+                                                                                        |> Admin.Internal.Form.FieldValueAutocomplete
+                                                                                        |> UpdateFormField props.formId label
                                                                                     , GotMsg (onSearch model params resource search_)
                                                                                     ]
 
                                                                             Nothing ->
                                                                                 ( search_, value_ )
-                                                                                    |> ElmAdmin.Internal.Form.FieldValueAutocomplete
-                                                                                    |> UpdateFormField ( form.title, label )
+                                                                                    |> Admin.Internal.Form.FieldValueAutocomplete
+                                                                                    |> UpdateFormField props.formId label
                                                                 }
                                                         }
                                                 )
@@ -180,18 +184,20 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                                     \search_ value__ ->
                                                                         if String.length search_ >= 3 then
                                                                             Batch
-                                                                                [ FetchAutocompleteOptions label
+                                                                                [ FetchAutocompleteOptions
+                                                                                    props.formId
+                                                                                    label
                                                                                     search_
                                                                                     (f.searchRequest model params search_)
                                                                                 , ( search_, value__ )
-                                                                                    |> ElmAdmin.Internal.Form.FieldValueRemoteAutocomplete
-                                                                                    |> UpdateFormField ( form.title, label )
+                                                                                    |> Admin.Internal.Form.FieldValueRemoteAutocomplete
+                                                                                    |> UpdateFormField props.formId label
                                                                                 ]
 
                                                                         else
                                                                             ( search_, value__ )
-                                                                                |> ElmAdmin.Internal.Form.FieldValueRemoteAutocomplete
-                                                                                |> UpdateFormField ( form.title, label )
+                                                                                |> Admin.Internal.Form.FieldValueRemoteAutocomplete
+                                                                                |> UpdateFormField props.formId label
                                                                 }
                                                         }
                                                 )
@@ -210,8 +216,8 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                                 ]
                                                                 { value = v
                                                                 , onInput =
-                                                                    ElmAdmin.Internal.Form.FieldValueBool
-                                                                        >> UpdateFormField ( form.title, label )
+                                                                    Admin.Internal.Form.FieldValueBool
+                                                                        >> UpdateFormField props.formId label
                                                                 }
                                                         }
                                                 )
@@ -234,8 +240,8 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                                 , toLabel = identity
                                                                 , toValue = identity
                                                                 , onInput =
-                                                                    ElmAdmin.Internal.Form.FieldValueString
-                                                                        >> UpdateFormField ( form.title, label )
+                                                                    Admin.Internal.Form.FieldValueString
+                                                                        >> UpdateFormField props.formId label
                                                                 }
                                                         }
                                                 )
@@ -257,8 +263,8 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                                 , toLabel = identity
                                                                 , toValue = identity
                                                                 , onInput =
-                                                                    ElmAdmin.Internal.Form.FieldValueString
-                                                                        >> UpdateFormField ( form.title, label )
+                                                                    Admin.Internal.Form.FieldValueString
+                                                                        >> UpdateFormField props.formId label
                                                                 }
                                                         }
                                                 )
@@ -280,8 +286,8 @@ viewForm ({ formModel, model, params, form, onSubmit } as props) =
                                                                 , max = f.max
                                                                 , step = f.step
                                                                 , onInput =
-                                                                    ElmAdmin.Internal.Form.FieldValueFloat
-                                                                        >> UpdateFormField ( form.title, label )
+                                                                    Admin.Internal.Form.FieldValueFloat
+                                                                        >> UpdateFormField props.formId label
                                                                 }
                                                         }
                                                 )

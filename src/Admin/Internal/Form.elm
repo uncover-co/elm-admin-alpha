@@ -1,30 +1,35 @@
-module ElmAdmin.Internal.Form exposing
+module Admin.Internal.Form exposing
     ( Field(..)
     , FieldValue(..)
     , Form
     , FormBuilder
     , FormModel
     , empty
+    , fromValues
     )
 
 import Dict exposing (Dict)
 import Http
 import Platform exposing (Task)
-import Set exposing (Set)
 
 
 type alias FormModel =
-    { initialized : Set String
+    { values : Dict String FieldValue
     , remoteAutocomplete : Dict ( String, String ) (Result Http.Error (List { id : String, label : String }))
-    , values : Dict ( String, String ) FieldValue
     }
 
 
 empty : FormModel
 empty =
-    { initialized = Set.empty
-    , remoteAutocomplete = Dict.empty
+    { remoteAutocomplete = Dict.empty
     , values = Dict.empty
+    }
+
+
+fromValues : Dict String FieldValue -> FormModel
+fromValues values =
+    { remoteAutocomplete = Dict.empty
+    , values = values
     }
 
 

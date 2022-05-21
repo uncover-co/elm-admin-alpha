@@ -19,11 +19,11 @@ module Admin.Page exposing
 -}
 
 import Admin.Internal.Application
+import Admin.Internal.Form exposing (FieldValue, FormModel)
 import Admin.Internal.Page exposing (Page(..))
 import Admin.Libs.Router exposing (RouteParams)
 import Admin.Shared exposing (Msg(..))
-import Dict
-import ElmAdmin.Internal.Form exposing (FormModel)
+import Dict exposing (Dict)
 import ElmAdmin.UI.Form
 import ElmAdmin.UI.List
 import Html as H
@@ -46,6 +46,7 @@ page title_ =
         , nav = \_ _ -> title_
         , init = \_ _ -> Nothing
         , view = \_ _ _ -> H.text ""
+        , forms = []
         }
 
 
@@ -66,6 +67,7 @@ params toParams (Page p) =
         , nav = \_ _ -> p.baseTitle
         , init = \_ _ -> Nothing
         , view = \_ _ _ -> H.text ""
+        , forms = []
         }
 
 
@@ -157,7 +159,8 @@ list props (Page p) =
 
 
 type alias FormAttributes model params =
-    { hidden : model -> params -> Bool
+    { id : Maybe String
+    , hidden : model -> params -> Bool
     , loading : model -> params -> Bool
     , readOnly : model -> params -> Bool
     }
@@ -165,7 +168,8 @@ type alias FormAttributes model params =
 
 formDefaults : FormAttributes model params
 formDefaults =
-    { hidden = \_ _ -> False
+    { id = Nothing
+    , hidden = \_ _ -> False
     , loading = \_ _ -> False
     , readOnly = \_ _ -> False
     }
@@ -174,7 +178,7 @@ formDefaults =
 {-| -}
 form :
     { init : model -> params -> Maybe resource
-    , form : ElmAdmin.Internal.Form.Form model msg params resource
+    , form : Admin.Internal.Form.Form model msg params resource
     , attrs : List (FormAttributes model params -> FormAttributes model params)
     , onSubmit : model -> params -> resource -> msg
     }
@@ -185,23 +189,43 @@ form props (Page p) =
         attrs =
             List.foldl (\fn a -> fn a) formDefaults props.attrs
 
-        init_ =
-            withInit p.init
-                (\model params_ ->
-                    props.init model params_
-                        |> Maybe.map
-                            (\resource ->
-                                Admin.Internal.Application.initFields model params_ resource props.form
-                                    |> UpdateFormModel
-                            )
-                        |> Maybe.withDefault DoNothing
+        formId : String
+        formId =
+            attrs.id
+                |> Maybe.withDefault
+                    ("eadm-form-" ++ (String.fromInt <| List.length p.forms))
+
+        forms_ :
+            List
+                ( String
+                , params
+                  -> model
+                  ->
+                    Maybe
+                        { values : Dict String FieldValue
+                        , initMsg : Msg msg
+                        }
                 )
+        forms_ =
+            ( formId
+            , \params_ model ->
+                props.init model params_
+                    |> Maybe.map
+                        (\resource ->
+                            Admin.Internal.Application.initFields model
+                                params_
+                                resource
+                                formId
+                                props.form
+                        )
+            )
+                :: p.forms
 
         view_ =
             withView p.view
-                (\formModel model params_ ->
+                (\forms model params_ ->
                     ElmAdmin.UI.Form.view
-                        { formModel = formModel
+                        { formId = formId
                         , model = model
                         , params = params_
                         , form = props.form
@@ -210,12 +234,13 @@ form props (Page p) =
                         , isReadOnly = attrs.readOnly model params_
                         , onSubmit = props.onSubmit
                         }
+                        (Dict.get formId forms)
                 )
     in
     Page
         { p
-            | init = init_
-            , view = view_
+            | view = view_
+            , forms = forms_
         }
 
 
@@ -233,18 +258,18 @@ withInit before after model params_ =
 
 
 withView :
-    (FormModel -> model -> params -> H.Html (Msg msg))
-    -> (FormModel -> model -> params -> H.Html (Msg msg))
-    -> FormModel
+    (Dict String FormModel -> model -> params -> H.Html (Msg msg))
+    -> (Dict String FormModel -> model -> params -> H.Html (Msg msg))
+    -> Dict String FormModel
     -> model
     -> params
     -> H.Html (Msg msg)
-withView before after formModel model params_ =
+withView before after forms model params_ =
     H.div []
-        [ before formModel model params_
+        [ before forms model params_
         , H.div
             [ HA.class "eadm eadm-view eadm-fade-slide" ]
-            [ after formModel model params_ ]
+            [ after forms model params_ ]
         ]
 
 

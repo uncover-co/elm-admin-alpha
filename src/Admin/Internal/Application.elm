@@ -7,13 +7,13 @@ module Admin.Internal.Application exposing
     , view
     )
 
+import Admin.Internal.Form exposing (FieldValue(..), Form, FormModel)
 import Admin.Internal.NavItem
 import Admin.Internal.Router exposing (RouterData)
 import Admin.Shared exposing (Action, Effect(..), Msg(..))
 import Browser
 import Browser.Navigation
 import Dict exposing (Dict)
-import ElmAdmin.Internal.Form exposing (FieldValue(..), Form, FormModel)
 import ElmAdmin.Styles
 import ElmAdmin.UI.Nav
 import ElmAdmin.UI.Notification exposing (NotificationStatus)
@@ -41,7 +41,6 @@ type alias Model model msg =
     , routerIndex : Maybe Int
     , routerData : Maybe (RouterData model msg)
     , darkMode : Bool
-    , formModel : FormModel
     , debounced : Dict String ( Posix, Msg msg )
     , notification :
         Maybe
@@ -87,7 +86,6 @@ init props flags url navKey =
             , routerIndex = routerIndex
             , routerData = routerData
             , darkMode = True
-            , formModel = ElmAdmin.Internal.Form.empty
             , debounced = Dict.empty
             , notification = Nothing
             }
@@ -107,6 +105,18 @@ update :
     -> Model model msg
     -> ( Model model msg, Cmd (Msg msg) )
 update props msg model =
+    update_ props msg model
+        |> initForms props
+
+
+update_ :
+    { update : msg -> model -> ( model, Action msg )
+    , routers : List (Admin.Internal.Router.Router model msg)
+    }
+    -> Msg msg
+    -> Model model msg
+    -> ( Model model msg, Cmd (Msg msg) )
+update_ props msg model =
     case msg of
         DoNothing ->
             ( model, Cmd.none )
@@ -169,17 +179,6 @@ update props msg model =
               }
             , Cmd.none
             )
-
-        UpdateFormModel fn ->
-            let
-                ( formModel, msg_ ) =
-                    fn model.formModel
-
-                model_ : Model model msg
-                model_ =
-                    { model | formModel = formModel }
-            in
-            update props msg_ model_
 
         GotMsg msg_ ->
             let
@@ -247,49 +246,67 @@ update props msg model =
                         Time.now
                     )
 
-        UpdateFormField k v ->
-            let
-                formModel =
-                    model.formModel
-            in
-            ( { model
-                | formModel =
-                    { formModel
-                        | values = Dict.insert k v formModel.values
-                    }
-              }
-            , Cmd.none
-            )
+        UpdateFormField formId field value ->
+            model.routerData
+                |> Maybe.andThen
+                    (\page ->
+                        Dict.get formId page.forms
+                            |> Maybe.map
+                                (\formModel ->
+                                    let
+                                        formModel_ : FormModel
+                                        formModel_ =
+                                            { formModel | values = Dict.insert field value formModel.values }
+                                    in
+                                    { model
+                                        | routerData =
+                                            Just
+                                                { page
+                                                    | forms = Dict.insert formId formModel_ page.forms
+                                                }
+                                    }
+                                )
+                    )
+                |> Maybe.map (\m -> ( m, Cmd.none ))
+                |> Maybe.withDefault ( model, Cmd.none )
 
-        FetchInitialAutocompleteOption k task ->
-            ( model, Task.attempt (GotInitialAutocompleteOption k) task )
+        FetchInitialAutocompleteOption formId field task ->
+            ( model, Task.attempt (GotInitialAutocompleteOption formId field) task )
 
-        GotInitialAutocompleteOption k response ->
+        GotInitialAutocompleteOption formId fieldId response ->
             case response of
                 Ok v ->
-                    update props (UpdateFormField k (FieldValueRemoteAutocomplete ( v.label, Just v ))) model
+                    update props (UpdateFormField formId fieldId (FieldValueRemoteAutocomplete ( v.label, Just v ))) model
 
                 _ ->
                     ( model, Cmd.none )
 
-        FetchAutocompleteOptions fieldId term task ->
-            ( model, Task.attempt (GotAutocompleteOptions fieldId term) task )
+        FetchAutocompleteOptions formId fieldId term task ->
+            ( model, Task.attempt (GotAutocompleteOptions formId fieldId term) task )
 
-        GotAutocompleteOptions fieldId term response ->
-            let
-                formModel : FormModel
-                formModel =
-                    model.formModel
-            in
-            ( { model
-                | formModel =
-                    { formModel
-                        | remoteAutocomplete =
-                            Dict.insert ( fieldId, term ) response formModel.remoteAutocomplete
-                    }
-              }
-            , Cmd.none
-            )
+        GotAutocompleteOptions formId fieldId term response ->
+            model.routerData
+                |> Maybe.andThen
+                    (\page ->
+                        Dict.get formId page.forms
+                            |> Maybe.map
+                                (\formModel ->
+                                    let
+                                        formModel_ : FormModel
+                                        formModel_ =
+                                            { formModel | remoteAutocomplete = Dict.insert ( fieldId, term ) response formModel.remoteAutocomplete }
+                                    in
+                                    { model
+                                        | routerData =
+                                            Just
+                                                { page
+                                                    | forms = Dict.insert formId formModel_ page.forms
+                                                }
+                                    }
+                                )
+                    )
+                |> Maybe.map (\m -> ( m, Cmd.none ))
+                |> Maybe.withDefault ( model, Cmd.none )
 
         SetDebounce key posix msg_ ->
             ( { model
@@ -326,68 +343,144 @@ update props msg model =
                     ( { model | debounced = remaining }, Cmd.none )
 
 
-initFields : model -> params -> resource -> Form model msg params resource -> FormModel -> ( FormModel, Msg msg )
-initFields model params resource form_ formModel =
-    ( { initialized = Set.insert form_.title formModel.initialized
-      , remoteAutocomplete = Dict.empty
-      , values =
-            form_.fields
-                |> List.map
-                    (\( label, field ) ->
-                        let
-                            fieldValue =
-                                case field of
-                                    ElmAdmin.Internal.Form.Text { value } ->
-                                        FieldValueString <| value resource
+initForms :
+    { update : msg -> model -> ( model, Action msg )
+    , routers : List (Admin.Internal.Router.Router model msg)
+    }
+    -> ( Model model msg, Cmd (Msg msg) )
+    -> ( Model model msg, Cmd (Msg msg) )
+initForms props ( model, cmd ) =
+    model.routerData
+        |> Maybe.map
+            (\page ->
+                if Set.isEmpty page.formLoading then
+                    ( model, cmd )
 
-                                    ElmAdmin.Internal.Form.Autocomplete { value } ->
-                                        let
-                                            value_ : Maybe String
-                                            value_ =
-                                                value resource
-                                        in
-                                        FieldValueAutocomplete ( value_ |> Maybe.withDefault "", value_ )
+                else
+                    let
+                        initData :
+                            { formLoading : List String
+                            , formValues : List ( String, Dict String FieldValue )
+                            , formInitMsgs : List (Msg msg)
+                            }
+                        initData =
+                            page.formLoading
+                                |> Set.foldl
+                                    (\id acc ->
+                                        case
+                                            Dict.get id page.formInits
+                                                |> Maybe.andThen (\fn -> fn model.model)
+                                        of
+                                            Just { values, initMsg } ->
+                                                { acc
+                                                    | formValues = ( id, values ) :: acc.formValues
+                                                    , formInitMsgs = initMsg :: acc.formInitMsgs
+                                                }
 
-                                    ElmAdmin.Internal.Form.RemoteAutocomplete _ ->
-                                        FieldValueRemoteAutocomplete ( "", Nothing )
+                                            Nothing ->
+                                                { acc | formLoading = id :: acc.formLoading }
+                                    )
+                                    { formLoading = [], formValues = [], formInitMsgs = [] }
 
-                                    ElmAdmin.Internal.Form.Checkbox { value } ->
-                                        FieldValueBool <| value resource
+                        forms_ : Dict String FormModel
+                        forms_ =
+                            initData.formValues
+                                |> List.foldl
+                                    (\( id, values ) acc ->
+                                        Dict.insert id (Admin.Internal.Form.fromValues values) acc
+                                    )
+                                    page.forms
 
-                                    ElmAdmin.Internal.Form.Radio { value } ->
-                                        FieldValueString <| value resource
+                        page_ : RouterData model msg
+                        page_ =
+                            { page
+                                | forms = forms_
+                                , formLoading =
+                                    Set.fromList initData.formLoading
+                            }
 
-                                    ElmAdmin.Internal.Form.Select { value } ->
-                                        FieldValueString <| value resource
+                        model_ : Model model msg
+                        model_ =
+                            { model | routerData = Just page_ }
+                    in
+                    if List.isEmpty initData.formInitMsgs then
+                        ( model_, cmd )
 
-                                    ElmAdmin.Internal.Form.Range { value } ->
-                                        FieldValueFloat <| value resource
-                        in
-                        ( ( form_.title, label ), fieldValue )
-                    )
-                |> Dict.fromList
-                |> (\v_ -> Dict.union v_ formModel.values)
-      }
-    , form_.fields
-        |> List.foldl
-            (\( label, field ) acc ->
-                case field of
-                    ElmAdmin.Internal.Form.RemoteAutocomplete { value, initRequest } ->
-                        value resource
-                            |> Maybe.map
-                                (\id ->
-                                    initRequest model params id
-                                        |> FetchInitialAutocompleteOption ( form_.title, label )
-                                        |> (\m -> m :: acc)
-                                )
-                            |> Maybe.withDefault acc
-
-                    _ ->
-                        acc
+                    else
+                        update props (Batch initData.formInitMsgs) model_
+                            |> Tuple.mapSecond (\cmd_ -> Cmd.batch [ cmd, cmd_ ])
             )
-            []
-        |> Batch
-    )
+        |> Maybe.withDefault ( model, cmd )
+
+
+initFields :
+    model
+    -> params
+    -> resource
+    -> String
+    -> Form model msg params resource
+    ->
+        { values : Dict String FieldValue
+        , initMsg : Msg msg
+        }
+initFields model params resource formId form_ =
+    { values =
+        form_.fields
+            |> List.map
+                (\( label, field ) ->
+                    let
+                        fieldValue =
+                            case field of
+                                Admin.Internal.Form.Text { value } ->
+                                    FieldValueString <| value resource
+
+                                Admin.Internal.Form.Autocomplete { value } ->
+                                    let
+                                        value_ : Maybe String
+                                        value_ =
+                                            value resource
+                                    in
+                                    FieldValueAutocomplete ( value_ |> Maybe.withDefault "", value_ )
+
+                                Admin.Internal.Form.RemoteAutocomplete _ ->
+                                    FieldValueRemoteAutocomplete ( "", Nothing )
+
+                                Admin.Internal.Form.Checkbox { value } ->
+                                    FieldValueBool <| value resource
+
+                                Admin.Internal.Form.Radio { value } ->
+                                    FieldValueString <| value resource
+
+                                Admin.Internal.Form.Select { value } ->
+                                    FieldValueString <| value resource
+
+                                Admin.Internal.Form.Range { value } ->
+                                    FieldValueFloat <| value resource
+                    in
+                    ( label, fieldValue )
+                )
+            |> Dict.fromList
+    , initMsg =
+        form_.fields
+            |> List.foldl
+                (\( label, field ) acc ->
+                    case field of
+                        Admin.Internal.Form.RemoteAutocomplete { value, initRequest } ->
+                            value resource
+                                |> Maybe.map
+                                    (\id_ ->
+                                        initRequest model params id_
+                                            |> FetchInitialAutocompleteOption formId label
+                                            |> (\m -> m :: acc)
+                                    )
+                                |> Maybe.withDefault acc
+
+                        _ ->
+                            acc
+                )
+                []
+            |> Batch
+    }
 
 
 subscriptions :
@@ -446,7 +539,7 @@ view props model =
         pageView : H.Html (Msg msg)
         pageView =
             model.routerData
-                |> Maybe.map (\d -> d.view model.formModel model.model)
+                |> Maybe.map (\d -> d.view d.forms model.model)
                 |> Maybe.withDefault (H.text "")
 
         activePath : String

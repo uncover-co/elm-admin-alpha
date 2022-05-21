@@ -143,7 +143,7 @@ initForm form resource =
 
 
 
--- ElmAdmin.Internal.Form.initFields resource form
+-- Admin.Internal.Form.initFields resource form
 --     |> UpdateFormModel
 --     |> SubCmd.effect
 
