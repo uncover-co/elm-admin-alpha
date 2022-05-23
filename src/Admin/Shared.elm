@@ -6,8 +6,8 @@ module Admin.Shared exposing
     )
 
 import Admin.Internal.Form exposing (FieldValue)
+import Admin.UI.Notification exposing (NotificationStatus)
 import Browser exposing (UrlRequest)
-import ElmAdmin.UI.Notification exposing (NotificationStatus)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Http

@@ -1,4 +1,4 @@
-module ElmAdmin.UI.Form exposing (..)
+module Admin.UI.Form exposing (..)
 
 import Admin.Internal.Form exposing (Field(..), FieldValue(..), Form, FormModel)
 import Admin.Shared exposing (Effect(..), Msg(..))

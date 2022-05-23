@@ -1,6 +1,7 @@
 module Admin exposing
     ( admin, adminWithActions, Admin
     , router, protectedRouter
+    , darkModeStrategy, darkTheme, disableModeSwitch, lightTheme, preferDarkMode
     )
 
 {-|
@@ -38,18 +39,62 @@ type Attribute model msg
 
 type alias Attributes model msg =
     { routers : List (Admin.Internal.Router.Router model msg)
+    , lightTheme : ThemeProvider.Theme
+    , darkTheme : ThemeProvider.Theme
+    , preferDarkMode : Bool
+    , darkModeStrategy : ThemeProvider.DarkModeStrategy
+    , disableModeSwitch : Bool
     }
 
 
 defaultAttrs : Attributes model msg
 defaultAttrs =
     { routers = []
+    , lightTheme = ThemeSpec.theme ThemeSpec.lightTheme
+    , darkTheme = ThemeSpec.theme ThemeSpec.darkTheme
+    , darkModeStrategy = ThemeProvider.ClassStrategy "eadm-dark"
+    , preferDarkMode = True
+    , disableModeSwitch = False
     }
 
 
 applyAttrs : List (Attribute model msg) -> Attributes model msg
 applyAttrs attrs =
     List.foldl (\(Attribute fn) a -> fn a) defaultAttrs attrs
+
+
+{-| -}
+lightTheme : ThemeSpec.ThemeSpec -> Attribute model msg
+lightTheme v =
+    Attribute <| \attrs -> { attrs | lightTheme = ThemeSpec.theme v }
+
+
+{-| -}
+darkTheme : ThemeSpec.ThemeSpec -> Attribute model msg
+darkTheme v =
+    Attribute <| \attrs -> { attrs | darkTheme = ThemeSpec.theme v }
+
+
+{-| -}
+preferDarkMode : Bool -> Attribute model msg
+preferDarkMode v =
+    Attribute <| \attrs -> { attrs | preferDarkMode = v }
+
+
+{-| -}
+disableModeSwitch : Bool -> Attribute model msg
+disableModeSwitch v =
+    Attribute <| \attrs -> { attrs | disableModeSwitch = v }
+
+
+{-| -}
+darkModeStrategy : ThemeProvider.DarkModeStrategy -> Attribute model msg
+darkModeStrategy v =
+    Attribute <| \attrs -> { attrs | darkModeStrategy = v }
+
+
+
+-- Routers
 
 
 {-| -}
@@ -62,6 +107,10 @@ router v =
 protectedRouter : (model -> Maybe subModel) -> List (Admin.Router.Route subModel msg) -> Attribute model msg
 protectedRouter a b =
     Attribute <| \attrs -> { attrs | routers = Admin.Internal.Router.protectedRouter a b :: attrs.routers }
+
+
+
+-- Starters
 
 
 {-| -}
@@ -125,11 +174,11 @@ adminWithActions props attrs_ =
             Admin.Internal.Application.view
                 { title = props.title
                 , theme =
-                    { lightTheme = ThemeSpec.theme ThemeSpec.lightTheme
-                    , darkTheme = ThemeSpec.theme ThemeSpec.darkTheme
-                    , darkModeStrategy = ThemeProvider.ClassStrategy "eadm-dark"
-                    , preferDarkMode = True
-                    , disableModeSwitch = False
+                    { lightTheme = attrs.lightTheme
+                    , darkTheme = attrs.darkTheme
+                    , darkModeStrategy = attrs.darkModeStrategy
+                    , preferDarkMode = attrs.preferDarkMode
+                    , disableModeSwitch = attrs.disableModeSwitch
                     }
                 }
         }

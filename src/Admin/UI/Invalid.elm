@@ -1,6 +1,6 @@
-module ElmAdmin.UI.Invalid exposing (view)
+module Admin.UI.Invalid exposing (view)
 
-import ElmAdmin.Internal.InvalidRouteData exposing (InvalidRouteData)
+import Admin.Internal.InvalidRouteData exposing (InvalidRouteData)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import ThemeSpec

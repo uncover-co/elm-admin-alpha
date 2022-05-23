@@ -348,7 +348,7 @@ main =
                 []
             , AR.route "/sign-in"
                 { page = pageSignIn
-                , options = []
+                , options = [ AR.full ]
                 }
                 [ AR.external
                     { url = "/sign-in/go"

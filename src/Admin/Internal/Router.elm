@@ -24,11 +24,12 @@ type Route model msg
         { url : String
         , label : String
         }
-    | InternalLink (RouteParams -> model -> { label : String, url : String })
     | Internal
         { path : String
         , page : PageData model msg
-        , hidden : RouteParams -> model -> Bool
+        , full : Bool
+        , protected : model -> Bool
+        , hidden : model -> RouteParams -> Bool
         , subRoutes : List (Route model msg)
         }
 
@@ -202,9 +203,6 @@ routePaths route_ =
         External _ ->
             []
 
-        InternalLink _ ->
-            []
-
         Internal r ->
             r.path :: List.concatMap routePaths r.subRoutes
 
@@ -221,9 +219,6 @@ toInternalPages_ routes acc =
             (\route_ acc_ ->
                 case route_ of
                     External _ ->
-                        acc_
-
-                    InternalLink _ ->
                         acc_
 
                     Internal r ->
@@ -246,14 +241,11 @@ toNavItems validRoutes routes params model =
                     External r ->
                         Just <| Admin.Internal.NavItem.NavItemExternal r
 
-                    InternalLink r ->
-                        Just <| Admin.Internal.NavItem.NavItemInternalLink (r params model)
-
                     Internal r ->
                         Dict.get r.path validRoutes
                             |> Maybe.andThen
                                 (\path ->
-                                    if r.hidden params model then
+                                    if r.protected model || r.hidden model params then
                                         Nothing
 
                                     else
@@ -263,6 +255,7 @@ toNavItems validRoutes routes params model =
                                                 , title =
                                                     r.page.nav params model
                                                         |> Maybe.withDefault ""
+                                                , full = r.full
                                                 , children =
                                                     toNavItems validRoutes r.subRoutes params model
                                                 }

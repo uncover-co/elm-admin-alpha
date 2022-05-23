@@ -1,4 +1,4 @@
-module ElmAdmin.UI.Nav exposing (view)
+module Admin.UI.Nav exposing (view)
 
 import Admin.Internal.NavItem
 import Html exposing (..)
@@ -10,16 +10,24 @@ viewItemGroup :
     ->
         { path : String
         , title : String
+        , full : Bool
         , children : List Admin.Internal.NavItem.NavItem
         }
     -> Html msg
 viewItemGroup activePath item =
+    let
+        active : Bool
+        active =
+            activePath == item.path
+    in
     li
-        [ class "eadm eadm-nav-list-item" ]
+        [ class "eadm eadm-nav-list-item"
+        , classList [ ( "eadm-m-full", active && item.full ) ]
+        ]
         [ a
             [ href item.path
             , class "eadm eadm-nav-item eadm-m-group"
-            , classList [ ( "eadm-m-active", activePath == item.path ) ]
+            , classList [ ( "eadm-m-active", active ) ]
             ]
             [ text item.title ]
         , viewList activePath item.children
@@ -37,16 +45,6 @@ viewList activePath items =
                 (\item_ ->
                     case item_ of
                         Admin.Internal.NavItem.NavItemExternal { url, label } ->
-                            li [ class "eadm eadm-nav-list-item" ]
-                                [ a
-                                    [ class "eadm eadm-nav-item"
-                                    , href url
-                                    , target "_blank"
-                                    ]
-                                    [ text label ]
-                                ]
-
-                        Admin.Internal.NavItem.NavItemInternalLink { url, label } ->
                             li [ class "eadm eadm-nav-list-item" ]
                                 [ a
                                     [ class "eadm eadm-nav-item"

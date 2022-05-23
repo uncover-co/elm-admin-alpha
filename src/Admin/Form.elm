@@ -60,8 +60,8 @@ module Admin.Form exposing
 -}
 
 import Admin.Internal.Form exposing (Field(..), FieldValue(..), FormBuilder)
+import Admin.Libs.List
 import Dict
-import ElmAdmin.Libs.List
 import Http
 import Platform exposing (Task)
 
@@ -216,7 +216,7 @@ autocomplete props f =
                                     value_ =
                                         case ( v, props.options model params ) of
                                             ( Just v_, Just options_ ) ->
-                                                ElmAdmin.Libs.List.find
+                                                Admin.Libs.List.find
                                                     (\option -> props.optionToLabel option == v_)
                                                     options_
 
@@ -405,7 +405,7 @@ radio props f =
                         case Dict.get props.label formModel.values of
                             Just (FieldValueString v) ->
                                 props.options model params
-                                    |> ElmAdmin.Libs.List.find
+                                    |> Admin.Libs.List.find
                                         (\option -> props.optionToLabel option == v)
                                     |> Maybe.map (\v_ -> ( resolver v_, errors ))
 
@@ -466,7 +466,7 @@ select props f =
                         case Dict.get props.label formModel.values of
                             Just (FieldValueString v) ->
                                 props.options model params
-                                    |> ElmAdmin.Libs.List.find
+                                    |> Admin.Libs.List.find
                                         (\option -> props.optionToLabel option == v)
                                     |> Maybe.map (\v_ -> ( resolver v_, errors ))
 

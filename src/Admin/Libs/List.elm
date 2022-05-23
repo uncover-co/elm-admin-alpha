@@ -1,7 +1,7 @@
-module ElmAdmin.Libs.List exposing (find)
+module Admin.Libs.List exposing (find)
 
 
-find: (a -> Bool) -> List a -> Maybe a
+find : (a -> Bool) -> List a -> Maybe a
 find fn xs =
     case xs of
         [] ->

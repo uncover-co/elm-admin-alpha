@@ -1,4 +1,4 @@
-module ElmAdmin.Internal.InvalidRouteData exposing (InvalidRouteData)
+module Admin.Internal.InvalidRouteData exposing (InvalidRouteData)
 
 
 type alias InvalidRouteData =

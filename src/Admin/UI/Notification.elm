@@ -1,4 +1,4 @@
-module ElmAdmin.UI.Notification exposing (..)
+module Admin.UI.Notification exposing (..)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)

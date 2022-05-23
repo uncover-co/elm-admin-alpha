@@ -116,6 +116,7 @@
 .eadm.eadm-sidebar-nav {
   flex-grow: 1;
   overflow: auto;
+  position: relative;
 }
 
 /* Nav */
@@ -150,6 +151,16 @@
   .eadm.eadm-nav-list
   .eadm.eadm-nav-item {
   padding-left: 70px;
+}
+
+.eadm.eadm-nav-list-item.eadm-m-full {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: auto;
+  background: var(--tmspc-background);
 }
 
 .eadm.eadm-nav-item {

@@ -1,12 +1,13 @@
 module Admin.Router exposing
-    ( route, routeLink, external, Route
+    ( route, external, Route
     , resource
     , hidden
+    , full, protected
     )
 
 {-|
 
-@docs route, routeLink, external, Route
+@docs route, external, Route
 @docs resource
 @docs hidden
 
@@ -32,13 +33,17 @@ type Option model msg
 
 
 type alias Options model =
-    { hidden : RouteParams -> model -> Bool
+    { hidden : model -> RouteParams -> Bool
+    , protected : model -> Bool
+    , full : Bool
     }
 
 
 defaultAttrs : Options model
 defaultAttrs =
     { hidden = \_ _ -> False
+    , protected = \_ -> False
+    , full = False
     }
 
 
@@ -48,9 +53,21 @@ applyAttrs attrs =
 
 
 {-| -}
-hidden : (RouteParams -> model -> Bool) -> Option model msg
+hidden : (model -> RouteParams -> Bool) -> Option model msg
 hidden v =
     Attribute <| \attrs -> { attrs | hidden = v }
+
+
+{-| -}
+protected : (model -> Bool) -> Option model msg
+protected v =
+    Attribute <| \attrs -> { attrs | protected = v }
+
+
+{-| -}
+full : Option model msg
+full =
+    Attribute <| \attrs -> { attrs | full = True }
 
 
 
@@ -61,12 +78,6 @@ hidden v =
 external : { url : String, label : String } -> Route model msg
 external =
     External
-
-
-{-| -}
-routeLink : (RouteParams -> model -> { label : String, url : String }) -> Route model msg
-routeLink =
-    InternalLink
 
 
 {-| -}
@@ -88,7 +99,9 @@ route path_ props subRoutes =
     Internal
         { path = path
         , page = Admin.Internal.Page.toPageData props.page
+        , full = options.full
         , hidden = options.hidden
+        , protected = options.protected
         , subRoutes = List.map (appendPath path) subRoutes
         }
 
@@ -133,9 +146,6 @@ appendPath : String -> Route model msg -> Route model msg
 appendPath path route_ =
     case route_ of
         External _ ->
-            route_
-
-        InternalLink _ ->
             route_
 
         Internal r ->

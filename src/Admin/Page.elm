@@ -23,9 +23,9 @@ import Admin.Internal.Form exposing (FieldValue, FormModel)
 import Admin.Internal.Page exposing (Page(..))
 import Admin.Libs.Router exposing (RouteParams)
 import Admin.Shared exposing (Msg(..))
+import Admin.UI.Form
+import Admin.UI.List
 import Dict exposing (Dict)
-import ElmAdmin.UI.Form
-import ElmAdmin.UI.List
 import Html as H
 import Html.Attributes as HA
 import W.DataRow
@@ -148,7 +148,7 @@ list props (Page p) =
             | view =
                 withView p.view
                     (\_ model params_ ->
-                        ElmAdmin.UI.List.view
+                        Admin.UI.List.view
                             { title = props.title
                             , items =
                                 props.init model params_
@@ -224,7 +224,7 @@ form props (Page p) =
         view_ =
             withView p.view
                 (\forms model params_ ->
-                    ElmAdmin.UI.Form.view
+                    Admin.UI.Form.view
                         { formId = formId
                         , model = model
                         , params = params_

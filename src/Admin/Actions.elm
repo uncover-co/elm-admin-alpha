@@ -62,7 +62,7 @@ You can trigger a notification popup from anywhere in your application through o
 
 import Admin.Form exposing (Form)
 import Admin.Shared exposing (Action, Effect(..), Msg(..))
-import ElmAdmin.UI.Notification
+import Admin.UI.Notification
 import Html as H
 import SubCmd
 
@@ -104,41 +104,41 @@ map =
 -}
 showNotification : H.Html msg -> Action msg
 showNotification content =
-    SubCmd.effect <| ShowNotification ElmAdmin.UI.Notification.None content
+    SubCmd.effect <| ShowNotification Admin.UI.Notification.None content
 
 
 {-| Triggers a notification with a "highlight" theme.
 -}
 showHighlightNotification : H.Html msg -> Action msg
 showHighlightNotification content =
-    SubCmd.effect <| ShowNotification ElmAdmin.UI.Notification.Highlight content
+    SubCmd.effect <| ShowNotification Admin.UI.Notification.Highlight content
 
 
 {-| Triggers a notification with a "success" theme.
 -}
 showSuccessNotification : H.Html msg -> Action msg
 showSuccessNotification content =
-    SubCmd.effect <| ShowNotification ElmAdmin.UI.Notification.Success content
+    SubCmd.effect <| ShowNotification Admin.UI.Notification.Success content
 
 
 {-| Triggers a notification with a "warning" theme.
 -}
 showWarningNotification : H.Html msg -> Action msg
 showWarningNotification content =
-    SubCmd.effect <| ShowNotification ElmAdmin.UI.Notification.Warning content
+    SubCmd.effect <| ShowNotification Admin.UI.Notification.Warning content
 
 
 {-| Triggers a notification with a "danger" theme.
 -}
 showDangerNotification : H.Html msg -> Action msg
 showDangerNotification content =
-    SubCmd.effect <| ShowNotification ElmAdmin.UI.Notification.Danger content
+    SubCmd.effect <| ShowNotification Admin.UI.Notification.Danger content
 
 
 {-| Set a form state based on a resource.
 -}
 initForm : Form model msg params resource -> resource -> Action msg
-initForm form resource =
+initForm _ _ =
     SubCmd.none
 
 

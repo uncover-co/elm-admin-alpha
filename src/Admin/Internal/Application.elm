@@ -11,12 +11,12 @@ import Admin.Internal.Form exposing (FieldValue(..), Form, FormModel)
 import Admin.Internal.NavItem
 import Admin.Internal.Router exposing (RouterData)
 import Admin.Shared exposing (Action, Effect(..), Msg(..))
+import Admin.Styles
+import Admin.UI.Nav
+import Admin.UI.Notification exposing (NotificationStatus)
 import Browser
 import Browser.Navigation
 import Dict exposing (Dict)
-import ElmAdmin.Styles
-import ElmAdmin.UI.Nav
-import ElmAdmin.UI.Notification exposing (NotificationStatus)
 import Html as H
 import Html.Attributes as HA
 import Html.Events as HE
@@ -570,14 +570,14 @@ view props model =
                 , strategy = props.theme.darkModeStrategy
                 }
         , W.Styles.globalStyles
-        , ElmAdmin.Styles.globalStyles
+        , Admin.Styles.globalStyles
         , H.div [ HA.classList [ ( "eadm-dark", model.darkMode ) ] ]
             [ case model.notification of
                 Just notification ->
                     Html.Keyed.node "div"
                         []
                         [ ( String.fromInt notification.id
-                          , ElmAdmin.UI.Notification.view
+                          , Admin.UI.Notification.view
                                 { status = notification.status
                                 , content = notification.content
                                 }
@@ -609,7 +609,7 @@ view props model =
                         ]
                     , H.div
                         [ HA.class "eadm eadm-sidebar-nav" ]
-                        [ ElmAdmin.UI.Nav.view
+                        [ Admin.UI.Nav.view
                             { active = activePath
                             , items = navItems
                             }

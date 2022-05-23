@@ -1,4 +1,4 @@
-module ElmAdmin.UI.List exposing (view)
+module Admin.UI.List exposing (view)
 
 import Admin.Shared exposing (Msg(..))
 import Html exposing (..)
