@@ -1,15 +1,14 @@
 module Admin.Router exposing
     ( route, external, Route
     , resource
-    , hidden
-    , full, protected
+    , protected, hidden, full
     )
 
 {-|
 
 @docs route, external, Route
 @docs resource
-@docs hidden
+@docs protected, hidden, full
 
 -}
 

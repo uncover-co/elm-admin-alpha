@@ -1,13 +1,14 @@
 module Admin exposing
     ( admin, adminWithActions, Admin
     , router, protectedRouter
-    , darkModeStrategy, darkTheme, disableModeSwitch, lightTheme, preferDarkMode
+    , lightTheme, darkTheme, preferDarkMode, disableModeSwitch, darkModeStrategy
     )
 
 {-|
 
 @docs admin, adminWithActions, Admin
 @docs router, protectedRouter
+@docs lightTheme, darkTheme, preferDarkMode, disableModeSwitch, darkModeStrategy
 
 -}
 
