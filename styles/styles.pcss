@@ -60,6 +60,9 @@
 /* Sidebar */
 
 .eadm.eadm-sidebar {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
   width: 340px;
   background: var(--tmspc-background);
   position: relative;
@@ -108,10 +111,18 @@
   }
 }
 
+/* Sidebar - Nav */
+
+.eadm.eadm-sidebar-nav {
+  flex-grow: 1;
+  overflow: auto;
+}
+
 /* Nav */
 
 .eadm.eadm-nav {
   font-family: var(--tmspc-font-text);
+  height: 2000px;
 }
 
 .eadm.eadm-nav-list {

@@ -607,10 +607,13 @@ view props model =
                           else
                             H.text ""
                         ]
-                    , ElmAdmin.UI.Nav.view
-                        { active = activePath
-                        , items = navItems
-                        }
+                    , H.div
+                        [ HA.class "eadm eadm-sidebar-nav" ]
+                        [ ElmAdmin.UI.Nav.view
+                            { active = activePath
+                            , items = navItems
+                            }
+                        ]
                     ]
                 , H.main_
                     [ HA.class "eadm eadm-main" ]
