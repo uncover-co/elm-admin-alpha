@@ -15,19 +15,18 @@ viewItemGroup :
         }
     -> Html msg
 viewItemGroup activePath item =
-    let
-        active : Bool
-        active =
-            activePath == item.path
-    in
     li
         [ class "eadm eadm-nav-list-item"
-        , classList [ ( "eadm-m-full", active && item.full ) ]
+        , classList
+            [ ( "eadm-m-full"
+              , String.startsWith item.path activePath && item.full
+              )
+            ]
         ]
         [ a
             [ href item.path
             , class "eadm eadm-nav-item eadm-m-group"
-            , classList [ ( "eadm-m-active", active ) ]
+            , classList [ ( "eadm-m-active", activePath == item.path ) ]
             ]
             [ text item.title ]
         , viewList activePath item.children

@@ -66,7 +66,8 @@ emptyUser =
 
 
 type Msg
-    = SignIn User
+    = ShowNotification
+    | SignIn User
     | CreatePost PostForm
     | SearchNicknames String
     | SearchNicknamesResponse String
@@ -92,8 +93,11 @@ update msg model =
                         , validNicknames = Just []
                         }
                     , AA.none
-                      -- , AA.cmd <|
-                      --     Browser.Navigation.pushUrl navKey "/posts"
+                    )
+
+                ShowNotification ->
+                    ( model
+                    , AA.showSuccessNotification (Html.text "Notification")
                     )
 
                 _ ->
@@ -224,9 +228,10 @@ searchPokemon =
 -- Pages
 
 
-pageHome : AP.Page model msg ()
+pageHome : AP.Page model Msg ()
 pageHome =
     AP.page "Welcome"
+        |> AP.init (\_ _ -> ShowNotification)
         |> AP.card
             (\_ _ ->
                 div [ style "padding" "20px 20px 1800px" ]

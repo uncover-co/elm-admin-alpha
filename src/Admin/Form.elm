@@ -1,5 +1,5 @@
 module Admin.Form exposing
-    ( form, Form, Field
+    ( form, Form, FormField
     , text, TextAttributes
     , autocomplete, AutocompleteAttributes
     , remoteAutocomplete, RemoteAutocompleteAttributes
@@ -12,7 +12,7 @@ module Admin.Form exposing
 
 {-|
 
-@docs form, Form, Field
+@docs form, Form, FormField
 
 
 # Form Fields
@@ -67,13 +67,14 @@ import Platform exposing (Task)
 
 
 {-| -}
-type alias Field model msg params resource =
-    Admin.Internal.Form.Field model msg params resource
+type alias Form model msg params resource =
+    Admin.Internal.Form.Form model msg params resource
 
 
 {-| -}
-type alias Form model msg params resource =
-    Admin.Internal.Form.Form model msg params resource
+type alias FormField model msg params resource a b =
+    FormBuilder model msg params resource (a -> b)
+    -> FormBuilder model msg params resource b
 
 
 {-| -}
@@ -110,8 +111,7 @@ text :
     String
     -> (resource -> String)
     -> List (TextAttributes model params resource -> TextAttributes model params resource)
-    -> FormBuilder model msg params resource (String -> a)
-    -> FormBuilder model msg params resource a
+    -> FormField model msg params resource String a
 text label value attrs_ f =
     let
         attrs =
@@ -177,8 +177,7 @@ autocomplete :
     , optionToLabel : x -> String
     , attrs : List (AutocompleteAttributes model msg params resource -> AutocompleteAttributes model msg params resource)
     }
-    -> FormBuilder model msg params resource (Maybe x -> a)
-    -> FormBuilder model msg params resource a
+    -> FormField model msg params resource (Maybe x) a
 autocomplete props f =
     let
         attrs : AutocompleteAttributes model msg params resource
@@ -266,8 +265,7 @@ remoteAutocomplete :
     , searchRequest : model -> params -> String -> Task Http.Error (List { id : String, label : String })
     , attrs : List (RemoteAutocompleteAttributes model params resource -> RemoteAutocompleteAttributes model params resource)
     }
-    -> FormBuilder model msg params resource (Maybe String -> a)
-    -> FormBuilder model msg params resource a
+    -> FormField model msg params resource (Maybe String) a
 remoteAutocomplete props f =
     let
         attrs : RemoteAutocompleteAttributes model params resource
@@ -323,8 +321,7 @@ checkbox :
     String
     -> (resource -> Bool)
     -> List (CheckboxAttributes model params resource -> CheckboxAttributes model params resource)
-    -> FormBuilder model msg params resource (Bool -> a)
-    -> FormBuilder model msg params resource a
+    -> FormField model msg params resource Bool a
 checkbox label value attrs_ f =
     let
         attrs =
@@ -380,8 +377,7 @@ radio :
     , optionToLabel : x -> String
     , attrs : List (RadioAttributes model params resource -> RadioAttributes model params resource)
     }
-    -> FormBuilder model msg params resource (x -> a)
-    -> FormBuilder model msg params resource a
+    -> FormField model msg params resource x a
 radio props f =
     let
         attrs =
@@ -441,8 +437,7 @@ select :
     , optionToLabel : x -> String
     , attrs : List (SelectAttributes model params resource -> SelectAttributes model params resource)
     }
-    -> FormBuilder model msg params resource (x -> a)
-    -> FormBuilder model msg params resource a
+    -> FormField model msg params resource x a
 select props f =
     let
         attrs =
@@ -503,8 +498,7 @@ range :
     , step : Float
     , attrs : List (RangeAttributes model params resource -> RangeAttributes model params resource)
     }
-    -> FormBuilder model msg params resource (Float -> a)
-    -> FormBuilder model msg params resource a
+    -> FormField model msg params resource Float a
 range props f =
     let
         attrs =
