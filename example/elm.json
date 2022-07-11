@@ -18,8 +18,8 @@
             "elm/url": "1.0.0",
             "uncover-co/elm-submodules": "1.1.0",
             "uncover-co/elm-theme-provider": "1.0.1",
-            "uncover-co/elm-theme-spec": "7.1.0",
-            "uncover-co/elm-widgets-alpha": "10.0.0"
+            "uncover-co/elm-theme-spec": "8.0.0",
+            "uncover-co/elm-widgets-alpha": "10.5.2"
         },
         "indirect": {
             "avh4/elm-color": "1.0.0",
