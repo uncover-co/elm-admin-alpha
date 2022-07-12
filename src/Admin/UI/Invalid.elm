@@ -8,7 +8,7 @@ import ThemeSpec
 
 view : List String -> List InvalidRouteData -> Html msg
 view duplicatedRoutes invalidRoutes =
-    div [ style "color" ThemeSpec.baseline.base ]
+    div [ style "color" ThemeSpec.base.fg ]
         [ if not (List.isEmpty duplicatedRoutes) then
             div []
                 [ p [] [ text "Duplicated routes:" ]
