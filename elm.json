@@ -3,7 +3,7 @@
     "name": "uncover-co/elm-admin-alpha",
     "summary": "A framework for building admin applications themed through ThemeSpec.",
     "license": "MPL-2.0",
-    "version": "16.0.3",
+    "version": "17.0.0",
     "exposed-modules": [
         "Admin",
         "Admin.Page",
