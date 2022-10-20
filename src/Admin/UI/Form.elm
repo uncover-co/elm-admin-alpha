@@ -299,7 +299,7 @@ viewForm ({ model, params, form, onSubmit } as props) formModel =
                     , section [ HA.class "eadm eadm-form-footer" ]
                         [ div [ HA.class "eadm eadm-form-footer-inner" ]
                             [ W.Button.view [ W.Button.primary ]
-                                { label = "Confirm"
+                                { label = H.text "Confirm"
                                 , onClick = DoNothing
                                 }
                             ]

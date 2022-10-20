@@ -17,9 +17,8 @@
             "elm/time": "1.0.0",
             "elm/url": "1.0.0",
             "uncover-co/elm-submodules": "1.1.0",
-            "uncover-co/elm-theme-provider": "2.0.0",
-            "uncover-co/elm-theme-spec": "8.0.1",
-            "uncover-co/elm-widgets-alpha": "11.0.0"
+            "uncover-co/elm-theme": "1.1.0",
+            "uncover-co/elm-widgets-alpha": "12.0.1"
         },
         "indirect": {
             "avh4/elm-color": "1.0.0",

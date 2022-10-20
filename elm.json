@@ -23,9 +23,8 @@
         "elm/time": "1.0.0 <= v < 2.0.0",
         "elm/url": "1.0.0 <= v < 2.0.0",
         "uncover-co/elm-submodules": "1.1.0 <= v < 2.0.0",
-        "uncover-co/elm-theme-provider": "2.0.0 <= v < 3.0.0",
-        "uncover-co/elm-theme-spec": "8.0.1 <= v < 9.0.0",
-        "uncover-co/elm-widgets-alpha": "11.0.0 <= v < 12.0.0"
+        "uncover-co/elm-theme": "1.0.0 <= v < 2.0.0",
+        "uncover-co/elm-widgets-alpha": "12.0.0 <= v < 13.0.0"
     },
     "test-dependencies": {
         "elm-explorations/test": "1.2.2 <= v < 2.0.0"

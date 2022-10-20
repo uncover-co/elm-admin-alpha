@@ -20,8 +20,7 @@ import Admin.Shared exposing (Msg(..))
 import Browser
 import Browser.Navigation
 import SubCmd
-import ThemeProvider
-import ThemeSpec
+import Theme
 
 
 {-| -}
@@ -40,10 +39,10 @@ type Attribute model msg
 
 type alias Attributes model msg =
     { routers : List (Admin.Internal.Router.Router model msg)
-    , lightTheme : ThemeProvider.Theme
-    , darkTheme : ThemeProvider.Theme
+    , lightTheme : Theme.Theme
+    , darkTheme : Theme.Theme
     , preferDarkMode : Bool
-    , darkModeStrategy : ThemeProvider.DarkModeStrategy
+    , darkModeStrategy : Theme.DarkModeStrategy
     , disableModeSwitch : Bool
     }
 
@@ -51,9 +50,9 @@ type alias Attributes model msg =
 defaultAttrs : Attributes model msg
 defaultAttrs =
     { routers = []
-    , lightTheme = ThemeSpec.theme ThemeSpec.lightTheme
-    , darkTheme = ThemeSpec.theme ThemeSpec.darkTheme
-    , darkModeStrategy = ThemeProvider.ClassStrategy "eadm-dark"
+    , lightTheme = Theme.lightTheme
+    , darkTheme = Theme.darkTheme
+    , darkModeStrategy = Theme.classStrategy "eadm-dark"
     , preferDarkMode = True
     , disableModeSwitch = False
     }
@@ -65,15 +64,15 @@ applyAttrs attrs =
 
 
 {-| -}
-lightTheme : ThemeSpec.ThemeSpec -> Attribute model msg
+lightTheme : Theme.Theme -> Attribute model msg
 lightTheme v =
-    Attribute <| \attrs -> { attrs | lightTheme = ThemeSpec.theme v }
+    Attribute <| \attrs -> { attrs | lightTheme = v }
 
 
 {-| -}
-darkTheme : ThemeSpec.ThemeSpec -> Attribute model msg
+darkTheme : Theme.Theme -> Attribute model msg
 darkTheme v =
-    Attribute <| \attrs -> { attrs | darkTheme = ThemeSpec.theme v }
+    Attribute <| \attrs -> { attrs | darkTheme = v }
 
 
 {-| -}
@@ -89,7 +88,7 @@ disableModeSwitch v =
 
 
 {-| -}
-darkModeStrategy : ThemeProvider.DarkModeStrategy -> Attribute model msg
+darkModeStrategy : Theme.DarkModeStrategy -> Attribute model msg
 darkModeStrategy v =
     Attribute <| \attrs -> { attrs | darkModeStrategy = v }
 

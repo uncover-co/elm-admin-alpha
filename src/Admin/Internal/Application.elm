@@ -24,7 +24,7 @@ import Html.Keyed
 import Set
 import SubModule
 import Task
-import ThemeProvider
+import Theme
 import Time exposing (Posix)
 import Url exposing (Url)
 import W.Styles
@@ -514,9 +514,9 @@ subscriptions props model =
 view :
     { title : String
     , theme :
-        { lightTheme : ThemeProvider.Theme
-        , darkTheme : ThemeProvider.Theme
-        , darkModeStrategy : ThemeProvider.DarkModeStrategy
+        { lightTheme : Theme.Theme
+        , darkTheme : Theme.Theme
+        , darkModeStrategy : Theme.DarkModeStrategy
         , preferDarkMode : Bool
         , disableModeSwitch : Bool
         }
@@ -558,13 +558,13 @@ view props model =
     , body =
         [ if props.theme.disableModeSwitch then
             if props.theme.preferDarkMode then
-                ThemeProvider.globalProvider props.theme.darkTheme
+                Theme.globalProvider props.theme.darkTheme
 
             else
-                ThemeProvider.globalProvider props.theme.lightTheme
+                Theme.globalProvider props.theme.lightTheme
 
           else
-            ThemeProvider.globalProviderWithDarkMode
+            Theme.globalProviderWithDarkMode
                 { light = props.theme.lightTheme
                 , dark = props.theme.darkTheme
                 , strategy = props.theme.darkModeStrategy
@@ -597,7 +597,7 @@ view props model =
                                 ]
                                 [ H.text props.title ]
                             ]
-                        , if not props.theme.disableModeSwitch && props.theme.darkModeStrategy /= ThemeProvider.SystemStrategy then
+                        , if not props.theme.disableModeSwitch then
                             H.button
                                 [ HA.class "eadm eadm-sidebar-dark-btn"
                                 , HE.onClick ToggleDarkMode
